@@ -7,6 +7,8 @@ dependencies = []   # standard library only
 
 [project.optional-dependencies]
 test = ["pytest>=8"]
+# hackathon evaluation (src/tslm_eval); the Q&A package above stays standard-library only
+eval = ["numpy>=1.26", "pandas>=2.1", "pyarrow>=14", "matplotlib>=3.8", "anthropic>=1.0"]
 
 [build-system]
 requires = ["setuptools>=68"]
