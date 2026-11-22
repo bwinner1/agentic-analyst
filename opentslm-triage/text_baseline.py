@@ -18,6 +18,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--data_dir", required=True)
     parser.add_argument("--out", required=True)
     parser.add_argument("--epochs", type=int, default=4)
+    parser.add_argument("--patience", type=int, default=2)
     parser.add_argument("--batch_size", type=int, default=1)
     parser.add_argument("--lr", type=float, default=5e-5)
     parser.add_argument("--max_samples", type=int)
@@ -117,9 +118,17 @@ def train(model: Any, tokenizer: Any, args: argparse.Namespace, out: Path) -> No
     optimizer = torch.optim.AdamW(parameters, lr=args.lr, weight_decay=0.05)
     total_steps = args.epochs * len(loader)
     scheduler = get_linear_schedule_with_warmup(optimizer, int(0.03 * total_steps), total_steps)
+    from peft import get_peft_model_state_dict, set_peft_model_state_dict
+
+    val_samples = [training_sample(row, tokenizer, args.max_prompt_tokens)[0]
+                   for row in read_rows(args.data_dir, "val", args.max_samples)]
+    if not val_samples:
+        raise ValueError("Validation split is empty")
+    val_loader = DataLoader(val_samples, batch_size=args.batch_size,
+                            collate_fn=partial(collate_text, pad_token_id=tokenizer.pad_token_id))
     model.config.use_cache = False
     model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
-    history = []
+    history, best_val, bad_epochs, best_state = [], float("inf"), 0, None
     for epoch in range(1, args.epochs + 1):
         model.train()
         running, seen, skipped = 0.0, 0, 0
@@ -150,11 +159,32 @@ def train(model: Any, tokenizer: Any, args: argparse.Namespace, out: Path) -> No
                 print(f"Text epoch {epoch} step {step}/{len(loader)} loss={loss.item():.4f}", flush=True)
         if not seen:
             raise RuntimeError("No text training batches succeeded; reduce batch_size or max_prompt_tokens")
-        history.append({"epoch": epoch, "train_loss": running / seen, "train_rows": seen, "skipped": skipped})
-        write_json(out / "train_log.json", {"args": vars(args), "history": history,
+        # Same checkpoint choice as train_triage.py: keep the epoch with the lowest validation loss.
+        model.eval()
+        val_total, val_seen = 0.0, 0
+        with torch.no_grad():
+            for batch in val_loader:
+                batch = {key: value.to(args.device) for key, value in batch.items()}
+                count = batch["input_ids"].shape[0]
+                val_total += model(**batch, use_cache=False).loss.item() * count
+                val_seen += count
+        val_loss = val_total / val_seen
+        history.append({"epoch": epoch, "train_loss": running / seen, "val_loss": val_loss,
+                        "train_rows": seen, "skipped": skipped})
+        print(f"Epoch {epoch}: train={running / seen:.4f} val={val_loss:.4f} (text)", flush=True)
+        if val_loss < best_val:
+            best_val, bad_epochs = val_loss, 0
+            best_state = {k: v.detach().to("cpu", copy=True) for k, v in get_peft_model_state_dict(model).items()}
+            model.save_pretrained(out / "adapter")
+            tokenizer.save_pretrained(out / "adapter")
+        else:
+            bad_epochs += 1
+        write_json(out / "train_log.json", {"args": vars(args), "history": history, "best_val_loss": best_val,
                                            "history_shortened_rows": dropped_rows})
-    model.save_pretrained(out / "adapter")
-    tokenizer.save_pretrained(out / "adapter")
+        if bad_epochs >= args.patience:
+            print(f"Early stopping after {bad_epochs} epochs without improvement (text)", flush=True)
+            break
+    set_peft_model_state_dict(model, best_state)
     model.gradient_checkpointing_disable()
 
 
