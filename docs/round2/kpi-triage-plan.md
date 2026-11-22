@@ -78,23 +78,46 @@ Systems:
 
 **Decision rule, fixed before any model result:** OpenTSLM is worth building the product on for triage if, on the test set, the fine-tuned OpenTSLM beats *both* the text-only Llama and the rules on full match, with the paired 95% interval of each difference above zero. If it only beats the rules, a fine-tuned text model is the simpler choice and we say so. Secondary checks: it should beat the rules on the "data-problem note" and "opposite direction" groups, where reading the note against the series is the point.
 
-## Results so far (held-out test set, 800 examples, 11 series)
+## Results (held-out test set: 800 examples from 11 series never seen in training)
 
-Full table: [`evaluation/kpi_triage/results.md`](../../evaluation/kpi_triage/results.md).
+Full tables: [`evaluation/kpi_triage/results.md`](../../evaluation/kpi_triage/results.md). Every model was fine-tuned once on the same 4,000 examples on one L40S, keeping its best epoch by validation loss (OpenTSLM: epoch 2 of 4, 33 minutes of training; text-only Llama: epoch 4 of 4, 64 minutes, sharing the GPU for most of it).
 
-| System | Full match | 95% interval | Verdict macro-F1 |
-|---|---|---|---|
-| Rules + note classifier | 0.619 | 0.510 to 0.702 | 0.708 |
-| Rules, series only | 0.497 | 0.400 to 0.579 | 0.487 |
-| Always normal | 0.250 | 0.214 to 0.304 | 0.100 |
-| Note classifier only | 0.233 | 0.203 to 0.281 | 0.539 |
+| System | Full match | 95% interval | Verdict macro-F1 | Unreadable |
+|---|---|---|---|---|
+| **Llama-3.2-1B fine-tuned, series as text** | **0.715** | 0.580 to 0.825 | **0.820** | 0% |
+| Rules + note classifier (thresholds tuned on training examples) | 0.619 | 0.510 to 0.702 | 0.708 | 0% |
+| Rules, series only | 0.497 | 0.400 to 0.579 | 0.487 | 0% |
+| **OpenTSLM-SP fine-tuned** | **0.455** | 0.394 to 0.544 | 0.695 | 3% |
+| Always normal | 0.250 | 0.214 to 0.304 | 0.100 | 0% |
+| Note classifier only | 0.233 | 0.203 to 0.281 | 0.539 | 0% |
+| OpenTSLM-SP before fine-tuning | 0.000 | | 0.000 | 100% |
 
-The rule thresholds were tuned on 1,000 training examples before any model result (`python -m kpi_triage tune-rules`; they lifted the rules from 0.545 to 0.619 full match on test), so the bar is not a setting picked by hand.
+Paired differences, example by example:
 
-What this already says:
-- **The task needs both inputs.** Rules with the note beat rules without it by 0.12 full match (paired interval 0.08 to 0.16), and the note alone cannot place anything.
-- **The rules leave room where the note matters.** They get 0.27 full match on windows whose note matches the event, and 0.22 on notes that point the other way. The note reader is the weak part: on the held-out wordings it reads 78 of 126 "up" event notes as "down", because it matches words, not meaning. Reading the note's meaning against the series is exactly what a fine-tuned model should do better.
-- The model rows (fine-tuned OpenTSLM, untuned OpenTSLM, text-only Llama) are running on the Nebius VM and will be added to this table.
+| Comparison | Full match | 95% interval |
+|---|---|---|
+| Text-only Llama minus rules | +0.096 | +0.027 to +0.169 |
+| OpenTSLM minus rules | -0.164 | -0.248 to -0.060 |
+| OpenTSLM minus text-only Llama | -0.260 | -0.336 to -0.172 |
+
+**Against the decision rule fixed in advance, OpenTSLM-SP fails:** it is below both the text-only Llama and the rules. The Round 1 risk named in ADR 0001 came true for this task: a text model given the same numbers spots better.
+
+**The use case itself works.** A 1B model fine-tuned for about an hour beats a tuned rule system on series and note wordings it never saw, and it gains most exactly where the note has to be read against the series:
+
+| Full match by note | n | Rules | OpenTSLM | Text-only Llama |
+|---|---|---|---|---|
+| Data-problem note | 159 | 0.69 | 0.41 | **0.89** |
+| Event note that explains the change | 200 | 0.27 | 0.46 | **0.64** |
+| Event note pointing the other way | 36 | 0.22 | 0.11 | **0.61** |
+| No note | 207 | **0.78** | 0.50 | 0.66 |
+| Note unrelated or saying nothing changed | 198 | **0.82** | 0.51 | 0.72 |
+
+Why OpenTSLM loses, from the breakdowns:
+- **It reads notes well but the series poorly.** Its verdict is right on 88% of windows whose note explains the event (rules 38%), so the language side works. But it gets frozen values fully right 31% of the time (rules 97%, text 82%), unit changes 36% (rules 100%, text 91%) and zero outages 21% (rules 50%, text 96%), and its start points are off by a median of 2 points (mean 3.3), where the rules and the text model are usually exact (median 0).
+- **The likely cause, not yet tested:** OpenTSLM-SP encodes the series in patches of several points, so exact values and positions blur, while the text model sees every value. Exact zeros, repeated values and a jump by a factor of 1,000 are what triage turns on.
+- **As a note reader the two models are level.** When the rules find the event and a model only gives the verdict, OpenTSLM reaches 0.688 and the text Llama 0.708 (difference -0.020, interval -0.046 to +0.011). This combination was added after seeing the first results, so it is exploratory.
+
+**Is the encoder worth anything on top of text?** A further run gives OpenTSLM the same numbers as text *and* its series input (`run.sh trainvalues`). If it beats the text-only Llama, the encoder adds something; if not, it does not. Result: _running at the time of writing; see the PR._
 
 ## TimeNet: the Round 2 dataset PR
 
@@ -109,11 +132,12 @@ Each round needs a dataset PR. TimeNet has no business KPI data yet, and Online 
 
 ## Next steps
 
-1. Add the three model rows when the VM runs finish, and check the decision rule.
-2. Hand-write 50 test notes (no templates) and re-score.
-3. Real-event check on NAB and the CiK tasks whose notes describe events.
-4. TimeNet connector for Online Retail II, and the Round 2 dataset PR.
-5. Product side: wire the Verdict into the Draft (a data issue stops the Draft; an explained event is cited; a business change gets measured by code).
+1. Finish the encoder test above (OpenTSLM with the values as text too).
+2. If the encoder adds nothing: build the Round 2 demo on the fine-tuned text model, which is smaller to serve and already beats the rules, and keep OpenTSLM as a measured negative result. If it does add something: use OpenTSLM with values as text.
+3. Try the other OpenTSLM variant (Flamingo, cross-attention to the series) and a finer patch size, which are the direct fixes for blurred positions, on this benchmark.
+4. Hand-write 50 test notes (no templates) and re-score; check real labelled events (NAB, the CiK tasks whose notes describe events).
+5. TimeNet connector for Online Retail II, and the Round 2 dataset PR.
+6. Product side: wire the Verdict into the Draft (a data issue stops the Draft; an explained event is cited; a business change gets measured by code).
 
 ## How to run
 
