@@ -67,6 +67,33 @@ def test_non_finite_forecast_becomes_a_failed_output(tmp_path):
     assert read_predictions(out, [make_instance()])["ATMBuildingClosedTask/1"].forecast is None
 
 
+def test_older_runs_keep_the_median_and_count_instances_with_a_gap(tmp_path):
+    row = _row("ATMBuildingClosedTask", 1, [5, 6, 7], [5, 6, 7])
+    row["parsed_ok"] = False  # one sample had a gap; the run did not save which one
+    _write_eval_output(tmp_path / "run", [row], settings={"num_samples": 3})
+    out = tmp_path / "x.jsonl"
+    opentslm.import_run(tmp_path / "run", out, [make_instance()])
+    assert list(read_predictions(out, [make_instance()])["ATMBuildingClosedTask/1"].forecast) == [5, 6, 7]
+    meta = json.loads(out.with_suffix(".meta.json").read_text())
+    assert meta["instances_with_an_unreadable_sample"] == 1 and meta["per_sample_validity_saved"] is False
+
+
+def test_median_uses_only_readable_samples_when_they_are_saved(tmp_path):
+    insts = [make_instance(seed=s) for s in (1, 2)]
+    good = _row("ATMBuildingClosedTask", 1, [0, 0, 0], [5, 6, 7])
+    good.update(parsed_ok=False, forecast_samples={"0": [[5, 6, 7], [7, 8, 9], [100, 100, 100]]},
+                samples_valid=[True, True, False])
+    none_readable = _row("ATMBuildingClosedTask", 2, [0, 0, 0], [5, 6, 7])
+    none_readable.update(parsed_ok=False, forecast_samples={"0": [[1, 1, 1], [2, 2, 2]]},
+                         samples_valid=[False, False])
+    _write_eval_output(tmp_path / "run", [good, none_readable])
+    out = tmp_path / "x.jsonl"
+    opentslm.import_run(tmp_path / "run", out, insts)
+    preds = read_predictions(out, insts)
+    assert list(preds["ATMBuildingClosedTask/1"].forecast) == [6, 7, 8]
+    assert preds["ATMBuildingClosedTask/2"].forecast is None
+
+
 def test_evaluated_ids_are_the_test_set(tmp_path):
     _write_eval_output(tmp_path / "run", [_row("A", 1, [1], [1]), _row("B", 3, [1], [1])])
     assert opentslm.evaluated_ids(tmp_path / "run") == ["A/1", "B/3"]

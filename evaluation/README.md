@@ -22,7 +22,7 @@ The Claude run needs `ANTHROPIC_API_KEY` (or an `ant auth login` profile). It wr
 
 ## Adding a system (OpenTSLM or anything else)
 
-An OpenTSLM run from `opentslm-cik/eval_cik.py` needs one command: `python -m tslm_eval import-opentslm <results folder> --name <system>`. It takes the median of the sampled forecasts, checks every instance's true values against CiK and records the run settings. A run without a checkpoint (`--ckpt none`) is the "before fine-tuning" row; name it `opentslm-pretrained`.
+An OpenTSLM run from `opentslm-cik/eval_cik.py` needs one command: `python -m tslm_eval import-opentslm <results folder> --name <system>`. It takes the median of the sampled forecasts, checks every instance's true values against CiK and records the run settings. If the run saved which samples were readable (`samples_valid`), only those count, and an instance with none is scored as a failed output, not as the placeholder values `eval_cik.py` fills in. A run without a checkpoint (`--ckpt none`) is the "before fine-tuning" row; name it `opentslm-pretrained`.
 
 For anything else:
 

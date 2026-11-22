@@ -6,7 +6,9 @@
   - train_log.json (next to it when training ran there): epochs and validation loss
 
 The median of the model's sampled forecasts becomes a point forecast, scored with the official
-RCRPS like every other system. Each instance's `truth` must equal CiK's own future values, which
+RCRPS like every other system. When the run saved which samples were readable, only those are
+used, and an instance with none counts as a failed output rather than as the placeholder values
+eval_cik.py fills in (see `_forecast`). Each instance's `truth` must equal CiK's own future values, which
 catches mismatched ids or a different CiK version before anything is scored.
 """
 
@@ -34,6 +36,29 @@ def _only(column_map: dict, what: str, iid: str) -> list:
     return next(iter(column_map.values()))
 
 
+def _forecast(r: dict, iid: str) -> list | None:
+    """The model's point forecast for one instance, or None when it gave no readable forecast.
+
+    eval_cik.py fills steps it could not read (from neighbouring steps, or the history mean), so a
+    filled-in forecast is not the model's own. When the run saved every sample and which ones were
+    readable, the median is taken over the readable samples only, and the instance fails if none
+    were. Older runs saved only the median; there the median is used as it is (a sample with a gap
+    cannot be told apart from the others), and `run_meta` counts how many instances had one.
+    """
+    samples, valid = r.get("forecast_samples"), r.get("samples_valid")
+    if samples is not None and valid is not None:
+        s = np.atleast_2d(np.asarray(_only(samples, "forecast", iid), dtype=float))
+        if len(valid) != len(s):
+            raise ValueError(f"{iid}: {len(s)} samples but {len(valid)} validity flags")
+        readable = s[np.asarray(valid, dtype=bool)]
+        if len(readable) == 0:
+            return None
+        forecast = np.median(readable, axis=0)
+    else:
+        forecast = np.asarray(_only(r["forecast_median"], "forecast", iid), dtype=float)
+    return forecast.tolist() if np.all(np.isfinite(forecast)) else None
+
+
 def evaluated_ids(results_dir: Path) -> list[str]:
     """Instance ids (Task/seed) the run was evaluated on, in file order."""
     return [f"{r['task_name']}/{r['seed']}" for r in _rows(results_dir)]
@@ -52,11 +77,7 @@ def import_run(results_dir: Path, out_path: Path, instances) -> list[str]:
         truth = np.asarray(_only(r["truth"], "truth", iid), dtype=float)
         if truth.shape != inst.future.shape or not np.allclose(truth, inst.future, rtol=1e-6, atol=1e-6):
             raise ValueError(f"{iid}: the run's true future differs from CiK's; ids or data version do not match")
-        forecast = np.asarray(_only(r["forecast_median"], "forecast", iid), dtype=float)
-        if np.all(np.isfinite(forecast)):
-            records.append({"id": iid, "forecast": forecast.tolist()})
-        else:
-            records.append({"id": iid, "forecast": None})  # scored as a failed output
+        records.append({"id": iid, "forecast": _forecast(r, iid)})  # None is scored as a failed output
         ids.append(iid)
     if len(set(ids)) != len(ids):
         raise ValueError(f"{results_dir}: duplicate instance ids")
@@ -82,6 +103,10 @@ def run_meta(results_dir: Path) -> dict:
         "temperature": settings.get("temperature"),
         "parsed_ok_rate": metrics.get("parsed_ok_rate"),
     }
+    if (results_dir / PREDICTIONS).exists():
+        rows = _rows(results_dir)
+        meta["instances_with_an_unreadable_sample"] = sum(not r.get("parsed_ok", True) for r in rows)
+        meta["per_sample_validity_saved"] = all("samples_valid" in r for r in rows)
     if log_path.exists():
         log = json.loads(log_path.read_text(encoding="utf-8"))
         history = log.get("history", [])
