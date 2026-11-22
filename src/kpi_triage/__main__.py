@@ -5,6 +5,7 @@
     python -m kpi_triage score                    # every runs/*.jsonl -> evaluation/kpi_triage/results.md
     python -m kpi_triage show test-00003          # one example as the text prompt a model sees, plus its answer
     python -m kpi_triage tune-rules               # grid-search the rule thresholds on training examples
+    python -m kpi_triage combine opentslm-finetuned   # rules find the event, that model's verdict reads the note
 
 Model runs (OpenTSLM, text-only Llama) happen on a GPU with opentslm-triage/; copy their
 predictions.jsonl into the runs folder under a system name and score again.
@@ -43,6 +44,10 @@ def main(argv: list[str] | None = None) -> None:
     t = sub.add_parser("tune-rules")
     t.add_argument("--data", type=Path, default=DATA)
     t.add_argument("--n", type=int, default=1000, help="training examples used (a fixed random sample)")
+    c = sub.add_parser("combine")
+    c.add_argument("model", help="a system in the runs folder whose verdicts read the note")
+    c.add_argument("--data", type=Path, default=DATA)
+    c.add_argument("--runs", type=Path, default=RUNS)
     sh = sub.add_parser("show")
     sh.add_argument("id")
     sh.add_argument("--data", type=Path, default=DATA)
@@ -77,6 +82,12 @@ def main(argv: list[str] | None = None) -> None:
         for acc, th in results[:10]:
             print(f"{acc:.3f}  spike={th.spike} span={th.span} level={th.level}")
         print(f"current TUNED: {baselines.TUNED}")
+    elif args.cmd == "combine":
+        rows = generate.read(args.data / "test.jsonl")
+        answers = score.read_predictions(args.runs / f"{args.model}.jsonl")
+        path = args.runs / f"rules+{args.model}.jsonl"
+        score.write_predictions(path, baselines.code_finds_model_reads(rows, answers))
+        print(f"wrote {path}")
     elif args.cmd == "show":
         split = args.id.split("-")[0]
         row = next(r for r in generate.read(args.data / f"{split}.jsonl") if r["id"] == args.id)

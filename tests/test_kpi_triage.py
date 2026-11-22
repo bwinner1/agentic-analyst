@@ -181,3 +181,18 @@ def test_a_system_against_itself_differs_by_zero(rows):
     j = score.judge_system(rs, baselines.rules(rs, rows["train"]))
     d, lo, hi = score.paired(j, j, score.MEASURES["full_match"], n_boot=50)
     assert d == lo == hi == 0.0
+
+
+def test_combination_keeps_rule_places_and_takes_model_verdicts(rows):
+    rs = rows["test"]
+    perfect = {r["id"]: format_answer(Label.from_dict(r["label"]), "x") for r in rs}
+    out = baselines.code_finds_model_reads(rs, perfect)
+    for r in rs:
+        f = baselines.find_event(r["values"], r["window"], r["period"])
+        got = parse_answer(out[r["id"]], r["window"])[0]
+        if f is None:
+            assert got == Label("normal", "none")
+        else:
+            assert (got.shape, got.start, got.end) == (f.shape, f.start, f.end)
+            if not f.signature and r["label"]["verdict"] != "normal":
+                assert got.verdict == r["label"]["verdict"]

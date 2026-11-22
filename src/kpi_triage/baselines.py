@@ -225,3 +225,25 @@ def tune(rows: list[dict], grid: dict = TUNING_GRID) -> list[tuple[float, Thresh
             ok += j["shape_ok"] and j["place_ok"]
         out.append((ok / len(rows), th))
     return sorted(out, key=lambda x: -x[0])
+
+
+def code_finds_model_reads(rows: list[dict], model_answers: dict[str, str]) -> dict[str, str]:
+    """ADR 0001 applied to triage: the rules find whether, what and where in the series; a model's
+    verdict replaces the word-overlap note reader. Series-only data signatures stay data issues,
+    and a window the rules find clean stays normal. Added after the first OpenTSLM results, so
+    it is exploratory, not part of the decision rule fixed in the plan."""
+    from .labels import parse_answer
+
+    out = {}
+    for r in rows:
+        f = find_event(r["values"], r["window"], r["period"])
+        if f is None:
+            label = Label("normal", "none")
+        elif f.signature:
+            label = Label("data_issue", f.shape, f.start, f.end)
+        else:
+            m = parse_answer(model_answers.get(r["id"], ""), r["window"])[0]
+            verdict = m.verdict if m is not None and m.verdict != "normal" else "business_change"
+            label = Label(verdict, f.shape, f.start, f.end)
+        out[r["id"]] = format_answer(label, "rules find, model reads the note")
+    return out
