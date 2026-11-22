@@ -30,6 +30,12 @@ We use **Jonan's test split**: 21 task types (105 instances, 37% of CiK's task w
 
 The earlier proposal (hold out the ATM, unemployment and sensor groups) is dropped: 50 of those 65 instances were in his training or validation data.
 
+## In short
+
+- **Fine-tuning works.** Before fine-tuning, OpenTSLM can't produce a forecast: 4% of its answers are readable and it scores 4.450. After fine-tuning, 100% are readable and it scores 0.282. On the 17 instances where the model gave a forecast before fine-tuning too, the error drops from 1.54 to 0.23, level with seasonal naive (0.24).
+- **It is level with strong simple baselines, not better.** That is true of single forecasts and of forecast ranges, where it is worse than one baseline.
+- **Its best cases are notes saying past data was bad** (a sensor glitch, maintenance). It beats seasonal naive there in Jonan's run. This is an early signal, not yet a result (see "What we can and can't claim").
+
 ## Results (held-out test set, official RCRPS, lower is better)
 
 | System | RCRPS | 95% interval |
@@ -44,11 +50,11 @@ The earlier proposal (hold out the ATM, unemployment and sensor groups) is dropp
 ![Error by system](../evaluation/results/chart_test.png)
 
 How to read it:
-- **Fine-tuning is what makes the model usable.** Before fine-tuning, OpenTSLM writes captions about the series (it was pretrained on describing M4 series), not the numbered forecast it is asked for. Only 4% of its sampled answers could be read as a forecast, and on 88 of 105 instances none of its 5 samples could. A failed output scores 5, the cap, so it averages 4.450. After fine-tuning, every answer is a readable forecast and the score is 0.282. The chart leaves this row out so the other bars stay readable.
+- **Fine-tuning is what makes the model usable.** Before fine-tuning, OpenTSLM writes captions about the series (it was pretrained on describing M4 series), not the numbered forecast it is asked for. Only 4% of its sampled answers could be read as a forecast, and on 88 of 105 instances none of its 5 samples could. A failed output scores 5, the cap, so it averages 4.450. After fine-tuning, every answer is a readable forecast and the score is 0.282. The gain is not only format: on the 17 instances where the model gave a readable forecast before fine-tuning, it scored 1.543 then and 0.233 after (seasonal naive: 0.239). The chart leaves this row out so the other bars stay readable.
 - **Every fine-tuned model and baseline is within the others' uncertainty.** The instance-by-instance comparison in `results.md` confirms it: no difference between them is clear of zero.
 - **One forecast moves the average.** On a solar task (`DirectNormalIrradianceFromClearsky/5`) the model scored 1.65 where seasonal naive scored 0.66. Without that one instance, ours, naive and seasonal naive all score 0.261 to 0.264.
 - **The model learned the format.** 100% of its answers parse into the right number of values, and its answers carry an explanation. This is a format check, not a quality check.
-- **The text helps where it describes the series' pattern.** On the sensor tasks the model scores 0.280, against 0.315 without the text and 0.320 for seasonal naive. On the holiday-traffic example below it follows the holiday dip that the seasonal baseline misses.
+- **Its best tasks are the ones where the note says past data was bad.** On the sensor tasks (a glitch, maintenance) the model scores 0.280, against 0.320 for seasonal naive, a paired difference of -0.040 (interval -0.066 to -0.002). On the holiday-traffic example below it follows the holiday dip that the seasonal baseline misses. It does worst on solar, where it is behind seasonal naive by 0.067 (+0.005 to +0.144).
 - **It often copies the seasonal-naive line it is given in the prompt.** Its forecast equals that line on 15 of 105 instances, and Jonan measured that it stays close to it on about 60% of tasks. On solar and traffic it does worse than seasonal naive.
 
 ![Where the text helped](../evaluation/results/chart_example.png)
@@ -84,8 +90,15 @@ Full tables: [`evaluation/results/uncertainty.md`](../evaluation/results/uncerta
 
 Supported by the numbers:
 - A 1B model, fine-tuned for about an hour on one GPU, reads a series and a business note and returns a forecast with an explanation, in the right format every time.
-- Fine-tuning is what makes it a forecaster. Before fine-tuning, 4% of its answers are readable forecasts and it scores 4.450; after, 100% and 0.282.
-- On held-out task types it is level with strong simple baselines, and better than them where the note describes a pattern in the series (sensor tasks, the holiday example).
+- **Fine-tuning works.** It turns OpenTSLM from a model that can't produce a forecast (4% readable, 4.450) into one level with strong simple baselines (100% readable, 0.282). Where both versions gave a forecast, the error drops from 1.54 to 0.23.
+- On held-out task types it is level with strong simple baselines.
+
+Promising, to be stated as an early signal:
+- **It beats the baseline where the note says past data was bad.** Sensor tasks: 0.280 against 0.320 for seasonal naive, interval just clear of 0 in Jonan's run, plus the glitch and maintenance examples in the PDF. Three cautions:
+  - It is 3 task types (15 instances), and this group stood out after seeing the results.
+  - In the rerun of the same checkpoint, the edge shrinks to 0.018 and the interval includes 0.
+  - Against the model trained without the note, the sensor difference is not clear (interval -0.121 to +0.117), so it is not established that the note causes it.
+- The claim must be defined by the kind of note. "Better where the baseline did badly" would be biased: selecting instances by the baseline's own large errors makes any other method look better by chance.
 - We report on task types the model never saw, scored with the benchmark's official metric, with intervals, and we tested our own uncertainty claim with a rule fixed in advance.
 
 Not supported:
@@ -95,7 +108,7 @@ Not supported:
 
 ### Corrections for the showcase PDF (Jonan)
 
-1. **Headline,** "Ties a strong baseline on error, beats it on uncertainty". Drop the second half. Suggestion: "Ties strong simple baselines on unseen tasks, and uses the note when it says past data was bad".
+1. **Headline,** "Ties a strong baseline on error, beats it on uncertainty". Drop the second half. Suggestion: "Fine-tuning turns a 1B time-series model into a forecaster that matches strong baselines on unseen tasks".
 2. **Tile "0.242, Range quality (CRPS), vs 0.251 for the baseline".** Replace it with the official score: "0.282, CiK's official score (RCRPS), vs 0.266 for seasonal naive. Level within the intervals."
 3. **Tile "100% of answers were valid forecasts".** The number is right, but it is a format check. Suggestion: "100% of answers were readable forecasts in the right format, against 4% before fine-tuning".
 4. **Tile "105 held-out test tasks".** These are 105 test cases from 21 task types. Suggestion: "105 test cases from 21 task types the model never saw in training".
