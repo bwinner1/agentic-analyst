@@ -1,7 +1,9 @@
 """Command line: run from the repository root.
 
     python -m tslm_eval fetch                 download the pinned CiK file (sha256-checked)
-    python -m tslm_eval split                 write the proposed held-out test set
+    python -m tslm_eval split                 write the test set (the instances OpenTSLM was held out from)
+    python -m tslm_eval import-opentslm opentslm-cik/results/full --name opentslm-finetuned-cik
+                                              convert an OpenTSLM eval_cik.py run into a prediction file
     python -m tslm_eval baselines             naive and seasonal-naive prediction files
     python -m tslm_eval export --split test   model inputs (no answers) for another runner, e.g. OpenTSLM
     python -m tslm_eval claude --limit 3      Claude run; prints a cost estimate, needs --yes to spend
@@ -21,7 +23,9 @@ from .forecasts import write_predictions
 RUNS = Path("evaluation/runs")
 RESULTS = Path("evaluation/results")
 INPUTS = Path("evaluation/inputs")
-DEFAULT_EXAMPLE = "ATMBuildingClosedTask/1"
+OPENTSLM_MAIN_RUN = "opentslm-cik/results/full"
+# Test-set instances: one where the note helped the fine-tuned model, one where it went badly wrong.
+DEFAULT_EXAMPLES = ["ExplicitTrafficForecastTaskwithHolidaysInPredictionWindow/4", "DirectNormalIrradianceFromClearsky/5"]
 
 
 def _instances(args):
@@ -42,15 +46,36 @@ def cmd_fetch(args):
 
 
 def cmd_split(args):
+    from . import opentslm
+
     instances = _instances(args)
-    ids = splits.group_holdout(instances, splits.PROPOSED_TEST_GROUPS)
+    known = {i.id for i in instances}
+    if args.groups:
+        groups = tuple(g.strip() for g in args.groups.split(","))
+        ids = splits.group_holdout(instances, groups)
+        what = f"task types in scenario groups {', '.join(groups)}"
+        source = f"python -m tslm_eval split --groups {args.groups}"
+    else:
+        ids = set(opentslm.evaluated_ids(Path(args.from_opentslm)))
+        unknown = ids - known
+        if unknown:
+            raise SystemExit(f"{len(unknown)} ids in {args.from_opentslm} are not CiK instances, e.g. {sorted(unknown)[0]}")
+        what = "task types OpenTSLM never saw in training"
+        source = f"python -m tslm_eval split --from-opentslm {args.from_opentslm}"
     tasks = {i.task for i in instances if i.id in ids}
     weight = sum(i.weight for i in instances if i.id in ids) / sum(i.weight for i in instances)
-    header = (f"Held-out test set: whole scenario groups {', '.join(splits.PROPOSED_TEST_GROUPS)}.\n"
-              f"{len(ids)} instances, {len(tasks)} tasks, {weight:.0%} of the CiK task weight.\n"
-              "Do not train on these. Regenerate with: python -m tslm_eval split")
+    header = (f"{len(tasks)} {what} ({len(ids)} instances, {weight:.0%} of CiK task weight)\n"
+              f"Regenerate with: {source}")
     splits.write_ids(Path(args.split_file), ids, header)
     print(f"wrote {args.split_file}: {len(ids)} instances from {len(tasks)} tasks ({weight:.0%} of weight)")
+
+
+def cmd_import_opentslm(args):
+    from . import opentslm
+
+    out = RUNS / f"{args.name}.jsonl"
+    ids = opentslm.import_run(Path(args.results_dir), out, _instances(args))
+    print(f"wrote {out} and {out.with_suffix('.meta.json')}: {len(ids)} instances from {args.results_dir}")
 
 
 def cmd_baselines(args):
@@ -108,10 +133,9 @@ def cmd_report(args):
     instances = _instances(args)
     split_file = Path(args.split_file)
     test_ids = splits.read_ids(split_file) if split_file.exists() else None
-    label = (f"scenario groups {', '.join(splits.PROPOSED_TEST_GROUPS)} "
-             f"({len(test_ids)} instances)") if test_ids else ""
+    label = splits.read_label(split_file) if test_ids else ""
     path = write_report(Path(args.runs), Path(args.out), instances, test_ids, label,
-                        example_id=args.example, highlight=args.highlight)
+                        examples=args.example, highlight=args.highlight)
     print(f"wrote {path}")
 
 
@@ -119,10 +143,18 @@ def main(argv=None):
     p = argparse.ArgumentParser(prog="python -m tslm_eval", description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--data", default=str(cik.DEFAULT_PATH))
-    p.add_argument("--split-file", default=str(splits.PROPOSED_SPLIT_FILE))
+    p.add_argument("--split-file", default=str(splits.TEST_SPLIT_FILE))
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("fetch").set_defaults(fn=cmd_fetch)
-    sub.add_parser("split").set_defaults(fn=cmd_split)
+    s = sub.add_parser("split", help="write the test-set id file")
+    s.add_argument("--from-opentslm", default=OPENTSLM_MAIN_RUN,
+                   help="an eval_cik.py results folder: its test instances become the test set")
+    s.add_argument("--groups", default="", help="instead, hold out whole scenario groups, e.g. atm,unemployment")
+    s.set_defaults(fn=cmd_split)
+    i = sub.add_parser("import-opentslm", help="convert an eval_cik.py results folder into a prediction file")
+    i.add_argument("results_dir", help="folder with test_predictions.jsonl, e.g. opentslm-cik/results/full")
+    i.add_argument("--name", required=True, help="system name, e.g. opentslm-finetuned-cik")
+    i.set_defaults(fn=cmd_import_opentslm)
     sub.add_parser("baselines").set_defaults(fn=cmd_baselines)
     e = sub.add_parser("export")
     e.add_argument("--split", choices=["all", "test", "train"], default="test")
@@ -141,7 +173,8 @@ def main(argv=None):
     r = sub.add_parser("report")
     r.add_argument("--runs", default=str(RUNS))
     r.add_argument("--out", default=str(RESULTS))
-    r.add_argument("--example", default=DEFAULT_EXAMPLE)
+    r.add_argument("--example", nargs="*", default=DEFAULT_EXAMPLES,
+                   help="instance ids (Task/seed) to chart; the first becomes chart_example.png")
     r.add_argument("--highlight", default=None, help="system to colour as ours (default: name with 'finetuned')")
     r.set_defaults(fn=cmd_report)
     args = p.parse_args(argv)

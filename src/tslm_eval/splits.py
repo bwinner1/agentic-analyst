@@ -1,8 +1,12 @@
 """Which instances are held out for testing.
 
 CiK tasks come in families of near-copies (16 Montreal-fire causal variants, 7 electricity
-heat-wave variants, ...). Holding out single tasks or seeds would test mostly memorisation, so the
-proposed split holds out whole scenario groups: the model never saw the scenario during training.
+heat-wave variants, ...). Holding out single tasks or seeds would test mostly memorisation.
+
+The test set we report on is the one the fine-tuned OpenTSLM model was actually held out from
+(`TEST_SPLIT_FILE`): 21 task types whose series never appear in its training or validation data,
+written by `python -m tslm_eval split` from its evaluation output. `group_holdout` (whole scenario
+groups) is the earlier proposal, kept for a future retrain.
 """
 
 from __future__ import annotations
@@ -27,7 +31,9 @@ GROUP_RULES: list[tuple[str, str]] = [
 # Business-like scenarios the model must not see in training: ATM cash withdrawals,
 # county unemployment, highway sensor faults. 13 tasks, 65 instances, 24% of the task weight.
 PROPOSED_TEST_GROUPS = ("atm", "unemployment", "sensor")
-PROPOSED_SPLIT_FILE = Path("evaluation/splits/test-holdout-groups.txt")
+
+# The default test set: the instances the OpenTSLM fine-tune never trained or validated on.
+TEST_SPLIT_FILE = Path("evaluation/splits/test-opentslm-cik.txt")
 
 
 def scenario_group(task: str) -> str:
@@ -52,6 +58,14 @@ def seed_holdout(instances, seeds=(5,)) -> set[str]:
 def read_ids(path: Path) -> set[str]:
     lines = Path(path).read_text(encoding="utf-8").splitlines()
     return {line.strip() for line in lines if line.strip() and not line.startswith("#")}
+
+
+def read_label(path: Path) -> str:
+    """The first comment line of a split file, which names the test set for the report."""
+    for line in Path(path).read_text(encoding="utf-8").splitlines():
+        if line.startswith("#"):
+            return line.lstrip("#").strip()
+    return Path(path).stem
 
 
 def write_ids(path: Path, ids: set[str], header: str) -> None:

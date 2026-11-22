@@ -78,15 +78,19 @@ def bar_chart(summary, path: Path, highlight: str | None = None, subtitle: str =
     ax.set_xlim(0, xmax * 1.15)
     ax.set_xlabel("RCRPS, lower is better")
     _frame(ax, "x")
-    _title(fig, "Forecasting with text context: error by system", subtitle +
-           " · bars: weighted mean · whiskers: 95% interval")
-    fig.subplots_adjust(left=0.24, right=0.97, top=1 - 0.9 / fig.get_figheight(), bottom=0.5 / fig.get_figheight() + 0.08)
+    _title(fig, "Forecasting with text context: error by system",
+           "\n".join(textwrap.wrap(subtitle, 130) + ["Bars: weighted mean. Whiskers: 95% interval."]))
+    fig.subplots_adjust(left=0.24, right=0.97, top=1 - 1.15 / fig.get_figheight(), bottom=0.5 / fig.get_figheight() + 0.08)
     fig.savefig(path)
     plt.close(fig)
 
 
-def example_chart(inst, forecasts: dict, path: Path) -> None:
-    """History, the true future, and each system's forecast for one instance."""
+def example_chart(inst, forecasts: dict, path: Path, scores: dict | None = None) -> None:
+    """History, the true future, and each system's forecast for one instance.
+
+    The first forecast is drawn on top. A forecast identical to an earlier one would be hidden under
+    it, so its legend entry says so. `scores` (system -> RCRPS) are shown in the legend.
+    """
     fig, ax = plt.subplots(figsize=(10, 5.6), dpi=DPI)
     n_past, h = len(inst.past), inst.horizon
     x_past = np.arange(n_past)
@@ -99,12 +103,22 @@ def example_chart(inst, forecasts: dict, path: Path) -> None:
     ax.axvline(n_past - 0.5, color=AXIS, linewidth=1)
     ax.plot(x_past, inst.past, color=MUTED, linewidth=2, solid_capstyle="round", label="History")
     ax.plot(x_future, inst.future, color=INK, linewidth=2, solid_capstyle="round", label="What happened")
-    for colour, (name, fc) in zip(SERIES, forecasts.items()):
-        if fc is None:
+    series = {name: np.asarray(fc, dtype=float) for name, fc in forecasts.items() if fc is not None}
+    series = {name: v if v.ndim == 1 else np.median(v, axis=0) for name, v in series.items()}
+    everything = np.concatenate([inst.past, inst.future, *series.values()])
+    visible = 0.005 * (np.nanmax(everything) - np.nanmin(everything))  # less than this apart looks like one line
+    drawn: dict[str, np.ndarray] = {}
+    for k, (colour, name) in enumerate(zip(SERIES, forecasts)):
+        if name not in series:
             continue
-        values = np.asarray(fc, dtype=float)
-        values = values if values.ndim == 1 else np.median(values, axis=0)
-        ax.plot(x_future, values, color=colour, linewidth=2, solid_capstyle="round", label=name)
+        values = series[name]
+        label = name if not scores or name not in scores else f"{name} ({scores[name]:.2f})"
+        twin = next((other for other, v in drawn.items() if np.max(np.abs(v - values)) <= visible), None)
+        if twin:
+            label += f", hidden under {twin}"
+        ax.plot(x_future, values, color=colour, linewidth=2, solid_capstyle="round", label=label,
+                zorder=10 - k)
+        drawn[name] = values
     times = list(inst.past_times) + list(inst.future_times)
     ticks = np.linspace(0, len(times) - 1, 6).round().astype(int)
     width = 10 if all(t.endswith("00:00:00") for t in times) else 16  # date only for daily or slower data
@@ -114,13 +128,17 @@ def example_chart(inst, forecasts: dict, path: Path) -> None:
     tick_labels[-1].set_horizontalalignment("right")
     ax.set_xlim(-0.5, len(times) - 0.5)
     _frame(ax, "y")
-    ax.legend(loc="upper left", bbox_to_anchor=(0, -0.08), ncol=len(forecasts) + 2, frameon=False,
+    labels = ax.get_legend_handles_labels()[1]
+    longest = max(len(t) for t in labels)
+    ncol = len(labels) if sum(len(t) for t in labels) < 110 else (3 if longest <= 40 else 2)
+    rows = -(-len(labels) // ncol)
+    ax.legend(loc="upper left", bbox_to_anchor=(0, -0.08), ncol=ncol, frameon=False,
               labelcolor=INK_2, handlelength=1.6)
     context = textwrap.shorten(inst.scenario or inst.background, 220, placeholder=" ...")
     wrapped = "\n".join(textwrap.wrap(f"Text given: {context}", 120))
     fig.text(0.02, 0.97, f"Example: {inst.task} (seed {inst.seed})", ha="left", va="top",
              fontsize=13, fontweight="semibold", color=INK)
     fig.text(0.02, 0.91, wrapped, ha="left", va="top", fontsize=9, color=INK_2)
-    fig.subplots_adjust(left=0.07, right=0.98, top=0.78, bottom=0.17)
+    fig.subplots_adjust(left=0.07, right=0.98, top=0.78, bottom=0.12 + 0.05 * rows)
     fig.savefig(path)
     plt.close(fig)

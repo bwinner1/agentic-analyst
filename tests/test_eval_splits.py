@@ -29,6 +29,7 @@ def test_split_file_round_trip(tmp_path):
     path = tmp_path / "split.txt"
     splits.write_ids(path, ids, "two lines\nof header")
     assert splits.read_ids(path) == ids
+    assert splits.read_label(path) == "two lines"
 
 
 @pytest.mark.skipif(not REAL_DATA.exists(), reason="run `python -m tslm_eval fetch` first")
