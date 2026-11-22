@@ -1,0 +1,43 @@
+{
+  "args": {
+    "base": "OpenTSLM/llama-3.2-1b-m4-sp",
+    "source": "auto",
+    "timenet_ref": "servicenow/context-is-key@1.0.0",
+    "timenet_registry": null,
+    "data": null,
+    "rationales": "cik_rationales.jsonl",
+    "no_context": false,
+    "no_baseline": false,
+    "out": "results/full",
+    "epochs": 4,
+    "patience": 2,
+    "batch_size": 1,
+    "lr_encoder": 0.0001,
+    "lr_projector": 5e-05,
+    "lr_lora": 5e-05,
+    "lora_r": 16,
+    "lora_dropout": 0.05,
+    "max_history": 512,
+    "max_samples": null,
+    "device": "cuda",
+    "seed": 42
+  },
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 0.7421009683158508,
+      "val_loss": 1.0932490587234498
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.26855959353405373,
+      "val_loss": 1.1760556612695967
+    },
+    {
+      "epoch": 3,
+      "train_loss": 0.19298739841080617,
+      "val_loss": 1.2553277475493294
+    }
+  ],
+  "best_val_loss": 1.0932490587234498
+}
