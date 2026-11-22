@@ -63,6 +63,11 @@ def main(argv: list[str] | None = None) -> None:
         model.load_from_file(args.ckpt)
     model.eval()
     TriageQADataset.data_dir, TriageQADataset.max_samples = args.data_dir, args.max_samples
+    # Answer with the prompt the checkpoint was trained on.
+    log = Path(args.ckpt).parent / "train_log.json"
+    TriageQADataset.with_values = bool(not untuned and log.is_file()
+                                       and json.loads(log.read_text(encoding="utf-8"))["args"].get("with_values"))
+    print(f"Series values also as text: {TriageQADataset.with_values}", flush=True)
     split = "validation" if args.split == "val" else args.split
     dataset = TriageQADataset(split, EOS_TOKEN=model.get_eos_token())
     rows = read_rows(args.data_dir, split, args.max_samples)

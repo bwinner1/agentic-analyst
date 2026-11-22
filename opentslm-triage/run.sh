@@ -10,8 +10,8 @@ DATA="${DATA:-$HOME/r2_work/data}"
 OUT="${OUT:-$HOME/r2_work/results}"
 
 case "${1:-}" in
-  smoke|untuned|train|text|text0) command="$1"; shift ;;
-  *) echo "Usage: bash opentslm-triage/run.sh {smoke|untuned|train|text|text0} [script flags]"; exit 2 ;;
+  smoke|untuned|train|trainvalues|text|text0) command="$1"; shift ;;
+  *) echo "Usage: bash opentslm-triage/run.sh {smoke|untuned|train|trainvalues|text|text0} [script flags]"; exit 2 ;;
 esac
 
 if [[ ! -f "$VENV/bin/activate" ]]; then
@@ -63,6 +63,11 @@ PY
   train)
     python "$HERE/train_triage.py" --data_dir "$DATA" --out "$OUT/train" "$@"
     python "$HERE/eval_triage.py" --data_dir "$DATA" --out "$OUT/train" --ckpt "$OUT/train/best_model.pt"
+    ;;
+  trainvalues)
+    # OpenTSLM with the series natively and the same values as text: does the encoder add anything?
+    python "$HERE/train_triage.py" --data_dir "$DATA" --out "$OUT/train-values" --with_values "$@"
+    python "$HERE/eval_triage.py" --data_dir "$DATA" --out "$OUT/train-values" --ckpt "$OUT/train-values/best_model.pt"
     ;;
   text)
     python "$HERE/text_baseline.py" --data_dir "$DATA" --out "$OUT/text" "$@"

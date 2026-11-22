@@ -64,11 +64,18 @@ def answer_text(row) -> str:
     return format_answer(Label.from_dict(row["label"]), row["reason"])
 
 
-def opentslm_example(row) -> Example:
+def opentslm_example(row, with_values: bool = False) -> Example:
+    """With `with_values`, the same numbers the text-only model reads also follow the series as
+    text, so OpenTSLM has everything the text model has plus its own series input: the fair test
+    of whether the encoder adds anything on top of text."""
     z, m, s = normalised(row)
     w = row["window"]
     hist, win = z[:-w], z[-w:]
     scale = f"normalised with the history's mean {m:.4g} and standard deviation {s:.4g}"
+    values = (
+        f"The same values as text. History before the review window: {', '.join(_fmt(v) for v in hist)}\n"
+        f"Review window: {', '.join(_fmt(v) for v in win)}\n"
+    ) if with_values else ""
     return Example(
         pre_prompt=_header(row),
         series_texts=[
@@ -76,7 +83,7 @@ def opentslm_example(row) -> Example:
             f"Review window ({w} points, same scale):",
         ],
         series=[hist.tolist(), win.tolist()],
-        post_prompt=f"{QUESTION}\n{ANSWER_INSTRUCTIONS}\nAnswer:",
+        post_prompt=f"{values}{QUESTION}\n{ANSWER_INSTRUCTIONS}\nAnswer:",
         answer=answer_text(row),
         meta={"id": row["id"], "window": w},
     )
