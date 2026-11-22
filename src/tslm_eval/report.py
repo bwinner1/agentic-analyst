@@ -299,8 +299,14 @@ def write_uncertainty_report(runs_dir: Path, out_dir: Path, instances, test_ids:
     ours = ours or default_highlight(scored)
     if ours not in scored:
         raise ValueError(f"no prediction file for our model ({ours}) in {runs_dir}")
+    from . import charts
+
     summary = summarize_uncertainty(scored, test_ids)
     summary.to_csv(out_dir / "uncertainty_summary.csv", index=False)
+    charts.bar_chart(summary, out_dir / "chart_uncertainty.png", highlight=ours,
+                     title="Forecast ranges: error by system, every forecast scored",
+                     subtitle=f"Held-out test set: {test_label}. Each system scored on all its forecasts "
+                              "(5 per case, or 1 for a single-forecast system) with the official RCRPS.")
     rows = [paired(scored, ours, o, test_ids) for o in summary.system if o != ours]
     pd.DataFrame(rows).to_csv(out_dir / "uncertainty_paired.csv", index=False)
     verdict = uncertainty_verdict(rows)
@@ -328,6 +334,7 @@ def write_uncertainty_report(runs_dir: Path, out_dir: Path, instances, test_ids:
         "highest forecast. For 5 well-calibrated forecasts it should be about 67%: lower means the ranges are too "
         "narrow (overconfident), higher means too wide.\n",
         "\n".join([head, *body]), "",
+        "![Forecast ranges by system](chart_uncertainty.png)\n",
         f"### {ours} against each system, instance by instance\n",
         "A negative difference means ours is better. If the interval includes 0, this test set cannot tell the two "
         "apart.\n",

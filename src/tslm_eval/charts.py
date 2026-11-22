@@ -60,7 +60,8 @@ def _title(fig, title: str, subtitle: str) -> None:
     fig.text(0.02, 0.97 - 0.075 * 6 / fig.get_figheight(), subtitle, ha="left", va="top", fontsize=10, color=INK_2)
 
 
-def bar_chart(summary, path: Path, highlight: str | None = None, subtitle: str = "") -> None:
+def bar_chart(summary, path: Path, highlight: str | None = None, subtitle: str = "",
+              title: str = "Forecasting with text context: error by system") -> None:
     """Horizontal bars, best (lowest RCRPS) on top, 95% interval as a thin whisker."""
     s = summary.sort_values("rcrps", ascending=False).reset_index(drop=True)  # barh draws bottom-up
     n = len(s)
@@ -78,7 +79,7 @@ def bar_chart(summary, path: Path, highlight: str | None = None, subtitle: str =
     ax.set_xlim(0, xmax * 1.15)
     ax.set_xlabel("RCRPS, lower is better")
     _frame(ax, "x")
-    _title(fig, "Forecasting with text context: error by system",
+    _title(fig, title,
            "\n".join(textwrap.wrap(subtitle, 130) + ["Bars: weighted mean. Whiskers: 95% interval."]))
     fig.subplots_adjust(left=0.24, right=0.97, top=1 - 1.15 / fig.get_figheight(), bottom=0.5 / fig.get_figheight() + 0.08)
     fig.savefig(path)

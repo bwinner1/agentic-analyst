@@ -116,3 +116,4 @@ def test_uncertainty_report_scores_sample_sets_and_states_the_verdict(tmp_path):
     assert summary.loc["opentslm-finetuned-cik", "coverage"] == pytest.approx(1.0)
     assert "n/a (single forecast)" in text and "### Verdict" in text
     assert "Better on uncertainty" in text  # ours brackets the truth; the baselines sit below it
+    assert (tmp_path / "out" / "chart_uncertainty.png").stat().st_size > 0
