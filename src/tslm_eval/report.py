@@ -9,6 +9,7 @@ from pathlib import Path
 import pandas as pd
 
 from . import metric
+from .baselines import SAMPLED_BASELINES
 from .forecasts import read_predictions
 from .splits import scenario_group
 
@@ -36,10 +37,13 @@ def score_file(path: Path, instances) -> pd.DataFrame:
     rows = []
     for inst in instances:
         p = preds[inst.id]
+        coverage, expected = metric.range_coverage(inst, p.forecast)
         rows.append({
             "id": inst.id, "task": inst.task, "group": scenario_group(inst.task), "seed": inst.seed,
             "weight": inst.weight, "rcrps": metric.rcrps(inst, p.forecast),
             "valid": p.forecast is not None, "problem": p.problem,
+            "n_samples": 0 if p.forecast is None else (1 if p.forecast.ndim == 1 else p.forecast.shape[0]),
+            "coverage": coverage, "coverage_expected": expected,
         })
     return pd.DataFrame(rows)
 
@@ -102,6 +106,13 @@ def _paired_table(rows: list[dict], ours: str) -> str:
     return "\n".join([head, *body])
 
 
+def _sample_use(m: dict) -> str:
+    n = m.get("num_samples")
+    if m.get("forecast_kind") == "samples":
+        return f"every readable sample of {n}"
+    return f"median of {n} samples" + (" (readable ones only)" if m.get("per_sample_validity_saved") else "")
+
+
 def _meta_lines(runs_dir: Path) -> list[str]:
     lines = []
     for meta_path in sorted(Path(runs_dir).glob("*.meta.json")):
@@ -121,7 +132,7 @@ def _meta_lines(runs_dir: Path) -> list[str]:
             lines.append(
                 f"- `{name}`: OpenTSLM `{m.get('model')}` {tuned}, "
                 f"context {'given' if m.get('with_context') else 'withheld in training and test'}, "
-                f"median of {m.get('num_samples')} samples at temperature {m.get('temperature')}{training}. "
+                f"{_sample_use(m)} at temperature {m.get('temperature')}{training}. "
                 f"Imported from `{m.get('source')}`."
             )
             continue
@@ -235,5 +246,101 @@ def write_report(runs_dir: Path, out_dir: Path, instances, test_ids: set[str] | 
             md += [f"![Example: {inst.id}]({name})\n"]
 
     path = out_dir / "results.md"
+    path.write_text("\n".join(md), encoding="utf-8")
+    return path
+
+
+VERDICTS = {
+    "better": "Better on uncertainty: ours beats every baseline with a range, and no interval includes 0.",
+    "level": "Level on uncertainty: the test set cannot tell ours apart from at least one baseline with a range.",
+    "worse": "Worse on uncertainty: at least one baseline with a range beats ours, with an interval clear of 0.",
+}
+
+
+def uncertainty_verdict(paired_rows: list[dict]) -> str | None:
+    """The rule fixed before the runs: compare ours with every sampled baseline, instance by instance.
+
+    "better" only if ours beats all of them with intervals clear of 0; "worse" if any beats ours with an
+    interval clear of 0; otherwise "level". None without a sampled baseline to compare with.
+    """
+    rows = [r for r in paired_rows if r["other"] in SAMPLED_BASELINES]
+    if not rows:
+        return None
+    if all(r["ci_high"] < 0 for r in rows):
+        return "better"
+    if any(r["ci_low"] > 0 for r in rows):
+        return "worse"
+    return "level"
+
+
+def _weighted(d: pd.DataFrame, col: str) -> float:
+    d = d[d[col].notna()]
+    return float((d[col] * d.weight).sum() / d.weight.sum()) if len(d) else float("nan")
+
+
+def summarize_uncertainty(scored: dict[str, pd.DataFrame], ids: set[str]) -> pd.DataFrame:
+    """RCRPS on sample sets plus how often the truth falls inside each system's range."""
+    summary = summarize(scored, ids)
+    extra = []
+    for name in summary.system:
+        d = scored[name][scored[name].id.isin(ids)]
+        valid = d[d.valid]
+        extra.append({"system": name, "samples": int(valid.n_samples.median()) if len(valid) else 0,
+                      "coverage": _weighted(d, "coverage"), "coverage_expected": _weighted(d, "coverage_expected")})
+    return summary.merge(pd.DataFrame(extra), on="system")
+
+
+def write_uncertainty_report(runs_dir: Path, out_dir: Path, instances, test_ids: set[str], test_label: str,
+                             ours: str | None = None) -> Path:
+    """Compare forecast ranges: every system scored on its sample set with the official RCRPS."""
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    scored = score_runs(runs_dir, instances)
+    ours = ours or default_highlight(scored)
+    if ours not in scored:
+        raise ValueError(f"no prediction file for our model ({ours}) in {runs_dir}")
+    summary = summarize_uncertainty(scored, test_ids)
+    summary.to_csv(out_dir / "uncertainty_summary.csv", index=False)
+    rows = [paired(scored, ours, o, test_ids) for o in summary.system if o != ours]
+    pd.DataFrame(rows).to_csv(out_dir / "uncertainty_paired.csv", index=False)
+    verdict = uncertainty_verdict(rows)
+
+    head = ("| System | Forecasts per case | RCRPS (lower is better) | 95% interval "
+            "| Truth inside the range (expected if well calibrated) | Valid outputs |\n|---|---|---|---|---|---|")
+    body = []
+    for r in summary.itertuples():
+        cov = "n/a (single forecast)" if pd.isna(r.coverage) else f"{r.coverage:.0%} ({r.coverage_expected:.0%})"
+        body.append(f"| {r.system} | {r.samples} | {r.rcrps:.3f} | {r.ci_low:.3f} to {r.ci_high:.3f} | {cov} "
+                    f"| {r.valid_rate:.0%} |")
+    md = [
+        "# Uncertainty: do the model's forecast ranges beat a baseline's?\n",
+        f"Generated {date.today().isoformat()} by `python -m tslm_eval report-uncertainty`. Held-out test set: "
+        f"{test_label}.\n",
+        "Every system is scored on its whole set of forecasts with the official RCRPS (CRPS over the samples, "
+        "half-weighted on the region the text is about, plus the constraint penalty). CRPS rewards a sensible "
+        "spread, so a single forecast is at a disadvantage against any set of samples. The fair comparison is "
+        "therefore with baselines that also give several forecasts, built from the history only:\n",
+        "- `seasonal-naive-past-seasons`: each forecast repeats one of the last 5 days or weeks (one of the last 5 "
+        "values when the series has no season).",
+        "- `seasonal-naive-bootstrap`: the seasonal-naive forecast plus 5 runs of the errors that rule made in the "
+        "history (a random walk of past one-step changes when there is no season).\n",
+        "\"Truth inside the range\" is the share of forecast steps where the true value lies between the lowest and "
+        "highest forecast. For 5 well-calibrated forecasts it should be about 67%: lower means the ranges are too "
+        "narrow (overconfident), higher means too wide.\n",
+        "\n".join([head, *body]), "",
+        f"### {ours} against each system, instance by instance\n",
+        "A negative difference means ours is better. If the interval includes 0, this test set cannot tell the two "
+        "apart.\n",
+        _paired_table(rows, ours), "",
+    ]
+    if verdict:
+        md += ["### Verdict\n",
+               "Rule fixed before the runs: claim better uncertainty only if ours beats every baseline with a range "
+               "and each interval is clear of 0.\n",
+               f"**{VERDICTS[verdict]}**\n"]
+    meta = _meta_lines(runs_dir)
+    if meta:
+        md += ["## Run settings\n", *meta, ""]
+    path = out_dir / "uncertainty.md"
     path.write_text("\n".join(md), encoding="utf-8")
     return path

@@ -74,13 +74,14 @@ def main():
             gen_kwargs = {"max_new_tokens": max_tokens_for(meta), "min_new_tokens": 4 * horizon}
             if args.num_samples > 1:
                 gen_kwargs.update(do_sample=True, temperature=args.temperature)
-            texts, forecasts, valid_all = [], [], True
+            texts, forecasts, valid_all, valids = [], [], True, []
             for _ in range(max(1, args.num_samples)):
                 text = model.generate(batch, **gen_kwargs)[0]
                 fc, valid, expl = cik_core.parse_answer(text, meta)
                 texts.append(text)
                 forecasts.append(fc)
                 valid_all &= valid
+                valids.append(bool(valid))
                 n_samples_ok += int(valid)
                 n_samples += 1
             n_valid += int(valid_all)
@@ -93,6 +94,9 @@ def main():
             f.write(json.dumps({
                 "task_name": meta["task_name"], "seed": meta["seed"],
                 "forecast_median": {k: np.median(v, axis=0).tolist() for k, v in samples.items()},
+                # every sample and whether it was readable, so ranges can be scored and unreadable ones dropped
+                "forecast_samples": {k: v.tolist() for k, v in samples.items()},
+                "samples_valid": valids,
                 "truth": {t["name"]: t["values"] for t in meta["targets"]},
                 "explanation": explanation, "raw_output": texts[0],
                 "parsed_ok": valid_all, "scores": scores, "seasonal_naive_scores": naive,

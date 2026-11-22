@@ -5,9 +5,11 @@
     python -m tslm_eval import-opentslm opentslm-cik/results/full --name opentslm-finetuned-cik
                                               convert an OpenTSLM eval_cik.py run into a prediction file
     python -m tslm_eval baselines             naive and seasonal-naive prediction files
+    python -m tslm_eval baselines --samples   baselines with 5 forecasts each, for the uncertainty comparison
     python -m tslm_eval export --split test   model inputs (no answers) for another runner, e.g. OpenTSLM
     python -m tslm_eval claude --limit 3      Claude run; prints a cost estimate, needs --yes to spend
     python -m tslm_eval report                score every file in evaluation/runs, write evaluation/results
+    python -m tslm_eval report-uncertainty    score the sample sets in evaluation/runs-samples
 """
 
 from __future__ import annotations
@@ -21,6 +23,7 @@ from . import baselines, cik, splits
 from .forecasts import write_predictions
 
 RUNS = Path("evaluation/runs")
+SAMPLE_RUNS = Path("evaluation/runs-samples")  # several forecasts per instance, for comparing ranges
 RESULTS = Path("evaluation/results")
 INPUTS = Path("evaluation/inputs")
 OPENTSLM_MAIN_RUN = "opentslm-cik/results/full"
@@ -73,17 +76,26 @@ def cmd_split(args):
 def cmd_import_opentslm(args):
     from . import opentslm
 
-    out = RUNS / f"{args.name}.jsonl"
-    ids = opentslm.import_run(Path(args.results_dir), out, _instances(args))
+    runs = Path(args.runs) if args.runs else (SAMPLE_RUNS if args.samples else RUNS)
+    out = runs / f"{args.name}.jsonl"
+    ids = opentslm.import_run(Path(args.results_dir), out, _instances(args), samples=args.samples)
     print(f"wrote {out} and {out.with_suffix('.meta.json')}: {len(ids)} instances from {args.results_dir}")
 
 
 def cmd_baselines(args):
     instances = _instances(args)
-    for name, fn in baselines.BASELINES.items():
-        rows = [{"id": i.id, "forecast": [float(v) for v in fn(i)]} for i in instances]
-        write_predictions(RUNS / f"{name}.jsonl", rows)
-        print(f"wrote {RUNS / f'{name}.jsonl'}")
+    if args.samples:
+        # The single-forecast seasonal naive goes alongside, to show what a range alone is worth.
+        runs, chosen = SAMPLE_RUNS, {**baselines.SAMPLED_BASELINES, "seasonal-naive": baselines.seasonal_naive}
+    else:
+        runs, chosen = RUNS, baselines.BASELINES
+    for name, fn in chosen.items():
+        rows = []
+        for i in instances:
+            f = fn(i)
+            rows.append({"id": i.id, "samples" if f.ndim == 2 else "forecast": f.tolist()})
+        write_predictions(runs / f"{name}.jsonl", rows)
+        print(f"wrote {runs / f'{name}.jsonl'}")
 
 
 def cmd_export(args):
@@ -139,6 +151,16 @@ def cmd_report(args):
     print(f"wrote {path}")
 
 
+def cmd_report_uncertainty(args):
+    from .report import write_uncertainty_report
+
+    split_file = Path(args.split_file)
+    test_ids = splits.read_ids(split_file)
+    path = write_uncertainty_report(Path(args.runs), Path(args.out), _instances(args), test_ids,
+                                    splits.read_label(split_file), ours=args.ours)
+    print(f"wrote {path}")
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(prog="python -m tslm_eval", description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -154,8 +176,13 @@ def main(argv=None):
     i = sub.add_parser("import-opentslm", help="convert an eval_cik.py results folder into a prediction file")
     i.add_argument("results_dir", help="folder with test_predictions.jsonl, e.g. opentslm-cik/results/full")
     i.add_argument("--name", required=True, help="system name, e.g. opentslm-finetuned-cik")
+    i.add_argument("--samples", action="store_true",
+                   help=f"import every readable sample, not the median (default folder: {SAMPLE_RUNS})")
+    i.add_argument("--runs", default="", help=f"output folder (default: {RUNS})")
     i.set_defaults(fn=cmd_import_opentslm)
-    sub.add_parser("baselines").set_defaults(fn=cmd_baselines)
+    b = sub.add_parser("baselines")
+    b.add_argument("--samples", action="store_true", help=f"baselines with 5 forecasts each, into {SAMPLE_RUNS}")
+    b.set_defaults(fn=cmd_baselines)
     e = sub.add_parser("export")
     e.add_argument("--split", choices=["all", "test", "train"], default="test")
     e.add_argument("--no-context", action="store_true", help="blank the text (does the model use it?)")
@@ -177,6 +204,11 @@ def main(argv=None):
                    help="instance ids (Task/seed) to chart; the first becomes chart_example.png")
     r.add_argument("--highlight", default=None, help="system to colour as ours (default: name with 'finetuned')")
     r.set_defaults(fn=cmd_report)
+    u = sub.add_parser("report-uncertainty", help="compare forecast ranges on the held-out test set")
+    u.add_argument("--runs", default=str(SAMPLE_RUNS))
+    u.add_argument("--out", default=str(RESULTS))
+    u.add_argument("--ours", default=None, help="our model's system name (default: name with 'finetuned')")
+    u.set_defaults(fn=cmd_report_uncertainty)
     args = p.parse_args(argv)
     args.fn(args)
 
