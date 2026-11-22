@@ -60,6 +60,21 @@ def test_write_report_produces_table_and_charts(tmp_path):
         assert (out / name).stat().st_size > 0
 
 
+def test_charts_leave_out_a_mostly_failed_system_and_name_it_instead(tmp_path, monkeypatch):
+    from tslm_eval import charts
+
+    drawn = {}
+    monkeypatch.setattr(charts, "bar_chart",
+                        lambda summary, path, **kw: drawn.update({path.name: (list(summary.system), kw["subtitle"])}))
+    insts = _instances()
+    _write_runs(tmp_path / "runs", insts)
+    text = report.write_report(tmp_path / "runs", tmp_path / "results", insts, {i.id for i in insts}, "all",
+                               highlight="oracle").read_text(encoding="utf-8")
+    systems, subtitle = drawn["chart_test.png"]
+    assert "broken" not in systems and "broken (RCRPS 5.00, 0% valid)" in subtitle
+    assert "| broken | 5.000 |" in text  # still in the table
+
+
 def test_a_system_run_on_the_test_set_only_is_kept_out_of_the_all_instances_table(tmp_path):
     insts = _instances()
     runs = tmp_path / "runs"

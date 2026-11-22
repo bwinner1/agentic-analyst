@@ -15,7 +15,7 @@ python -m tslm_eval baselines      # naive + seasonal-naive -> evaluation/runs/
 python -m tslm_eval claude --split test            # prints a cost estimate; add --yes to call the API
 python -m tslm_eval claude --split test --no-context --yes
 python -m tslm_eval report         # scores everything in evaluation/runs/ -> evaluation/results/
-pytest                             # 79 tests, no API key or GPU needed
+pytest                             # 80 tests, no API key or GPU needed
 ```
 
 The uncertainty comparison (do the model's forecast ranges beat a baseline's?) has its own folder, because every system in it gives several forecasts per instance:

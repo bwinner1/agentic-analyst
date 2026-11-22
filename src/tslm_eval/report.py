@@ -163,6 +163,20 @@ def _group_table(groups: pd.DataFrame) -> str:
     return "\n".join([head, *rows])
 
 
+def _chart(summary: pd.DataFrame, path: Path, highlight: str | None, subtitle: str, **kw) -> None:
+    """Bar chart without systems that mostly failed: a bar near the cap of 5 would flatten the rest.
+
+    Those systems stay in the tables; the subtitle names them with their score.
+    """
+    from . import charts
+
+    failed = summary[summary.valid_rate < 0.5]
+    if len(failed):
+        subtitle += ". Not drawn, most outputs unreadable: " + ", ".join(
+            f"{r.system} (RCRPS {r.rcrps:.2f}, {r.valid_rate:.0%} valid)" for r in failed.itertuples())
+    charts.bar_chart(summary[summary.valid_rate >= 0.5], path, highlight=highlight, subtitle=subtitle, **kw)
+
+
 def write_report(runs_dir: Path, out_dir: Path, instances, test_ids: set[str] | None, test_label: str,
                  examples: list[str] | None = None, highlight: str | None = None) -> Path:
     from . import charts
@@ -197,8 +211,7 @@ def write_report(runs_dir: Path, out_dir: Path, instances, test_ids: set[str] | 
         summary_test = summarize(scored, test_ids)
         summary_test.to_csv(out_dir / "summary_test.csv", index=False)
         md += [f"## Held-out test set: {test_label}\n", _table(summary_test, ref_name), ""]
-        charts.bar_chart(summary_test, out_dir / "chart_test.png", highlight=highlight,
-                         subtitle=f"Held-out test set: {test_label}")
+        _chart(summary_test, out_dir / "chart_test.png", highlight, f"Held-out test set: {test_label}")
         if highlight in scored:
             others = [n for n in summary_test.system if n != highlight]
             rows = [paired(scored, highlight, o, test_ids) for o in others]
@@ -215,8 +228,7 @@ def write_report(runs_dir: Path, out_dir: Path, instances, test_ids: set[str] | 
         md += ["Zero-shot systems (baselines, Claude, pretrained OpenTSLM) never trained on CiK, so all 355 are "
                "unseen for them. A model fine-tuned on CiK must be read on the held-out set only.\n",
                _table(summary_all, ref_name), ""]
-        charts.bar_chart(summary_all, out_dir / "chart_all.png", highlight=highlight,
-                         subtitle="All 355 instances (71 tasks)")
+        _chart(summary_all, out_dir / "chart_all.png", highlight, "All 355 instances (71 tasks)")
     if partial:
         md += [f"Not in this table, because they were run on the test set only: {', '.join(partial)}.\n"]
 
@@ -299,14 +311,12 @@ def write_uncertainty_report(runs_dir: Path, out_dir: Path, instances, test_ids:
     ours = ours or default_highlight(scored)
     if ours not in scored:
         raise ValueError(f"no prediction file for our model ({ours}) in {runs_dir}")
-    from . import charts
-
     summary = summarize_uncertainty(scored, test_ids)
     summary.to_csv(out_dir / "uncertainty_summary.csv", index=False)
-    charts.bar_chart(summary, out_dir / "chart_uncertainty.png", highlight=ours,
-                     title="Forecast ranges: error by system, every forecast scored",
-                     subtitle=f"Held-out test set: {test_label}. Each system scored on all its forecasts "
-                              "(5 per case, or 1 for a single-forecast system) with the official RCRPS.")
+    _chart(summary, out_dir / "chart_uncertainty.png", ours,
+           f"Held-out test set: {test_label}. Each system scored on all its forecasts "
+           "(5 per case, or 1 for a single-forecast system) with the official RCRPS",
+           title="Forecast ranges: error by system, every forecast scored")
     rows = [paired(scored, ours, o, test_ids) for o in summary.system if o != ours]
     pd.DataFrame(rows).to_csv(out_dir / "uncertainty_paired.csv", index=False)
     verdict = uncertainty_verdict(rows)
