@@ -20,10 +20,21 @@ import numpy as np
 from .events import robust_scale
 from .labels import Label, format_answer
 
-Z_SPIKE = 4.0  # a point this many robust standard deviations from its seasonal expectation stands out
-Z_SPAN = 2.5  # neighbours beyond this join the same event
-Z_LEVEL = 3.0  # mean shift of the tail needed for a level change
 UNIT_RATIO = 30.0  # a jump by this factor or more at once reads as a unit change
+
+
+@dataclass(frozen=True)
+class Thresholds:
+    spike: float = 4.0  # a point this many robust standard deviations from its seasonal expectation stands out
+    span: float = 2.5  # neighbours beyond this join the same event
+    level: float = 3.0  # mean shift of the tail needed for a level change
+
+
+# Chosen by `python -m kpi_triage tune-rules`: the best detection (shape and start right) on training examples
+# (never test), over the grid in TUNING_GRID; ties keep the first grid point. Before tuning they were
+# 4.0 / 2.5 / 3.0, which scored 0.488 against 0.508 tuned, on a fixed sample of 1,000 training examples.
+TUNED = Thresholds(spike=6.0, span=2.0, level=3.5)
+TUNING_GRID = {"spike": (4.0, 5.0, 6.0, 7.0, 8.0), "span": (2.0, 2.5, 3.0), "level": (2.5, 3.0, 3.5, 4.0, 5.0)}
 
 NOTE_CLASS = {
     "none": "nothing", "irrelevant": "nothing", "no_effect": "nothing",
@@ -99,7 +110,7 @@ def _expected(y: np.ndarray, n_hist: int, period: int | None) -> np.ndarray:
     return np.full(len(y), np.median(hist[-max(10, len(hist) // 4):]))
 
 
-def find_event(values, window: int, period: int | None) -> Finding | None:
+def find_event(values, window: int, period: int | None, th: Thresholds = TUNED) -> Finding | None:
     y = np.asarray(values, dtype=float)
     n_hist = len(y) - window
     hist, win = y[:n_hist], y[n_hist:]
@@ -131,23 +142,23 @@ def find_event(values, window: int, period: int | None) -> Finding | None:
     for j in range(0, window - max(3, int(np.ceil(0.35 * window))) + 1):
         tail = z[j:]
         m = float(np.mean(tail))
-        if abs(m) >= Z_LEVEL and np.mean(np.sign(tail) == np.sign(m)) >= 0.8:
+        if abs(m) >= th.level and np.mean(np.sign(tail) == np.sign(m)) >= 0.8:
             score = abs(m) * np.sqrt(len(tail))
             if best is None or score > best[0]:
                 best = (score, j, m)
     if best is not None:
         _, j, m = best
         # Start where the shift begins, not at an earlier stray point.
-        while j < window - 3 and abs(z[j]) < Z_SPAN:
+        while j < window - 3 and abs(z[j]) < th.span:
             j += 1
         return Finding("level_up" if m > 0 else "level_down", j, window - 1, False)
     k = int(np.argmax(np.abs(z)))
-    if abs(z[k]) >= Z_SPIKE:
+    if abs(z[k]) >= th.spike:
         sign = np.sign(z[k])
         a = b = k
-        while a > 0 and z[a - 1] * sign >= Z_SPAN:
+        while a > 0 and z[a - 1] * sign >= th.span:
             a -= 1
-        while b < window - 1 and z[b + 1] * sign >= Z_SPAN:
+        while b < window - 1 and z[b + 1] * sign >= th.span:
             b += 1
         return Finding("spike" if sign > 0 else "dip", a, b, False)
     return None
@@ -194,3 +205,23 @@ def majority(rows: list[dict], train_rows: list[dict]) -> dict[str, str]:
 
 
 SYSTEMS = {"rules": rules, "series-only": series_only, "note-only": note_only, "majority": majority}
+
+
+def tune(rows: list[dict], grid: dict = TUNING_GRID) -> list[tuple[float, Thresholds]]:
+    """Detection match (shape and start right, or 'none' for normal windows) for every grid point,
+    best first. Only the series detector depends on the thresholds, so the note plays no part."""
+    from itertools import product
+
+    from .score import judge
+
+    out = []
+    for spike, span, level in product(grid["spike"], grid["span"], grid["level"]):
+        th = Thresholds(spike, span, level)
+        ok = 0
+        for r in rows:
+            f = find_event(r["values"], r["window"], r["period"], th)
+            pred = Label("normal", "none") if f is None else Label("business_change", f.shape, f.start, f.end)
+            j = judge(r, pred)
+            ok += j["shape_ok"] and j["place_ok"]
+        out.append((ok / len(rows), th))
+    return sorted(out, key=lambda x: -x[0])

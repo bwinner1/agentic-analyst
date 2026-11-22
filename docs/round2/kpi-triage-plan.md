@@ -68,7 +68,7 @@ Systems:
 
 | System | What it shows |
 |---|---|
-| Rules (seasonal residuals, zero / frozen / unit-change checks, level-shift search) + a note classifier fitted on training notes | What a careful analyst could script; the bar to clear |
+| Rules (seasonal residuals, zero / frozen / unit-change checks, level-shift search; thresholds tuned on training examples) + a note classifier fitted on training notes | What a careful analyst could script; the bar to clear |
 | Rules without the note / note classifier without the series | What each input is worth alone |
 | Always "normal" | The floor |
 | **OpenTSLM-SP (Llama-3.2-1B), fine-tuned** | Ours |
@@ -84,14 +84,16 @@ Full table: [`evaluation/kpi_triage/results.md`](../../evaluation/kpi_triage/res
 
 | System | Full match | 95% interval | Verdict macro-F1 |
 |---|---|---|---|
-| Rules + note classifier | 0.545 | 0.456 to 0.626 | 0.681 |
-| Rules, series only | 0.427 | 0.335 to 0.531 | 0.458 |
+| Rules + note classifier | 0.619 | 0.510 to 0.702 | 0.708 |
+| Rules, series only | 0.497 | 0.400 to 0.579 | 0.487 |
 | Always normal | 0.250 | 0.214 to 0.304 | 0.100 |
 | Note classifier only | 0.233 | 0.203 to 0.281 | 0.539 |
 
+The rule thresholds were tuned on 1,000 training examples before any model result (`python -m kpi_triage tune-rules`; they lifted the rules from 0.545 to 0.619 full match on test), so the bar is not a setting picked by hand.
+
 What this already says:
-- **The task needs both inputs.** Rules with the note beat rules without it by 0.12 full match (paired interval 0.07 to 0.15), and the note alone cannot place anything.
-- **The rules leave plenty of room.** They get 0.25 full match on windows whose note matches the event, and 0.25 on notes that point the other way. The note reader is the weak part: on the held-out wordings it reads 78 of 126 "up" event notes as "down", because it matches words, not meaning. The series rules also flag 40% of normal windows, because real KPIs are noisy. Reading the note's meaning against the series is exactly what a fine-tuned model should do better.
+- **The task needs both inputs.** Rules with the note beat rules without it by 0.12 full match (paired interval 0.08 to 0.16), and the note alone cannot place anything.
+- **The rules leave room where the note matters.** They get 0.27 full match on windows whose note matches the event, and 0.22 on notes that point the other way. The note reader is the weak part: on the held-out wordings it reads 78 of 126 "up" event notes as "down", because it matches words, not meaning. Reading the note's meaning against the series is exactly what a fine-tuned model should do better.
 - The model rows (fine-tuned OpenTSLM, untuned OpenTSLM, text-only Llama) are running on the Nebius VM and will be added to this table.
 
 ## TimeNet: the Round 2 dataset PR

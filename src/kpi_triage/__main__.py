@@ -4,6 +4,7 @@
     python -m kpi_triage baselines                # rules, series-only, note-only, majority -> evaluation/kpi_triage/runs/
     python -m kpi_triage score                    # every runs/*.jsonl -> evaluation/kpi_triage/results.md
     python -m kpi_triage show test-00003          # one example as the text prompt a model sees, plus its answer
+    python -m kpi_triage tune-rules               # grid-search the rule thresholds on training examples
 
 Model runs (OpenTSLM, text-only Llama) happen on a GPU with opentslm-triage/; copy their
 predictions.jsonl into the runs folder under a system name and score again.
@@ -39,6 +40,9 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("--runs", type=Path, default=RUNS)
     s.add_argument("--out", type=Path, default=OUT)
     s.add_argument("--reference", default="rules")
+    t = sub.add_parser("tune-rules")
+    t.add_argument("--data", type=Path, default=DATA)
+    t.add_argument("--n", type=int, default=1000, help="training examples used (a fixed random sample)")
     sh = sub.add_parser("show")
     sh.add_argument("id")
     sh.add_argument("--data", type=Path, default=DATA)
@@ -64,6 +68,15 @@ def main(argv: list[str] | None = None) -> None:
         args.out.mkdir(parents=True, exist_ok=True)
         (args.out / "results.md").write_text(text, encoding="utf-8")
         print(text)
+    elif args.cmd == "tune-rules":
+        import random
+
+        train = generate.read(args.data / "train.jsonl")
+        sample = random.Random(0).sample(train, min(args.n, len(train)))
+        results = baselines.tune(sample)
+        for acc, th in results[:10]:
+            print(f"{acc:.3f}  spike={th.spike} span={th.span} level={th.level}")
+        print(f"current TUNED: {baselines.TUNED}")
     elif args.cmd == "show":
         split = args.id.split("-")[0]
         row = next(r for r in generate.read(args.data / f"{split}.jsonl") if r["id"] == args.id)
