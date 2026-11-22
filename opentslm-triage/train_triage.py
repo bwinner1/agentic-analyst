@@ -28,6 +28,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--lora_dropout", type=float, default=0.05)
     parser.add_argument("--max_samples", type=int)
     parser.add_argument("--with_values", action="store_true", help="also give the series values as text")
+    parser.add_argument("--with_marks", action="store_true", help="add the two marker series")
     parser.add_argument("--device")
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args(argv)
@@ -73,6 +74,7 @@ def main(argv: list[str] | None = None) -> None:
     out.mkdir(parents=True, exist_ok=True)
     TriageQADataset.data_dir, TriageQADataset.max_samples = args.data_dir, args.max_samples
     TriageQADataset.with_values = args.with_values
+    TriageQADataset.with_marks = args.with_marks
     model = load_model(args.base, args.device, args.lora_r, args.lora_dropout)
     train_ds = TriageQADataset("train", EOS_TOKEN=model.get_eos_token())
     val_ds = TriageQADataset("validation", EOS_TOKEN=model.get_eos_token())

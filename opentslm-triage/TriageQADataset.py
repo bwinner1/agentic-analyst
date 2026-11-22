@@ -24,12 +24,13 @@ class TriageQADataset(QADataset):
     data_dir: str = "data/triage"
     max_samples: int | None = None
     with_values: bool = False  # also write the series values as text (kpi_triage.prompting)
-    _configuration: tuple[str, int | None, str, bool] | None = None
+    with_marks: bool = False  # add the two marker series (kpi_triage.prompting.marks)
+    _configuration: tuple[str, int | None, str, bool, bool] | None = None
 
     def __init__(self, split: Literal["train", "test", "validation"], EOS_TOKEN: str, **kwargs: Any):
         if _IMPORT_ERROR is not None:
             raise RuntimeError("TriageQADataset requires the existing OpenTSLM environment") from _IMPORT_ERROR
-        configuration = (str(self.data_dir), self.max_samples, EOS_TOKEN, self.with_values)
+        configuration = (str(self.data_dir), self.max_samples, EOS_TOKEN, self.with_values, self.with_marks)
         cls = type(self)
         if cls._configuration != configuration:
             # QADataset caches all three formatted splits on the subclass.
@@ -45,7 +46,7 @@ class TriageQADataset(QADataset):
     def _example(self, row: dict[str, Any]) -> Any:
         from kpi_triage.prompting import opentslm_example
 
-        return opentslm_example(row, with_values=self.with_values)
+        return opentslm_example(row, with_values=self.with_values, with_marks=self.with_marks)
 
     def _format_sample(self, row: dict[str, Any]) -> dict[str, Any]:
         from opentslm.prompt.prompt_with_answer import PromptWithAnswer
