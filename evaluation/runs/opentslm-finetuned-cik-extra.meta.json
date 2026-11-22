@@ -1,0 +1,16 @@
+{
+  "system_type": "opentslm",
+  "source": "opentslm-cik/results/extra",
+  "model": "OpenTSLM/llama-3.2-1b-m4-sp",
+  "checkpoint": "results/extra/best_model.pt",
+  "with_context": true,
+  "num_samples": 3,
+  "temperature": 0.7,
+  "parsed_ok_rate": 0.9968253968253968,
+  "instances_with_an_unreadable_sample": 1,
+  "per_sample_validity_saved": false,
+  "epochs_run": 1,
+  "best_epoch": 1,
+  "best_val_loss": 1.125615974834987,
+  "extra_train": "rows.parquet"
+}

@@ -41,6 +41,11 @@ tests/              tests at the 'Ask a Question' seam, on fixtures
 prototypes/         throwaway prototype (kept for reference)
 ```
 
+## Hackathon evaluation
+
+`src/tslm_eval/` and `evaluation/` score forecasting systems (baselines, Claude, pretrained and fine-tuned OpenTSLM) on Context is Key with the benchmark's own metric.
+Start with `docs/evaluation-plan.md` and `evaluation/README.md`.
+
 ## Adding an answer type
 
 Add a module to `src/agentic_analyst/answer_types/` with `PATTERN`, optional `PRIORITY` and `answer(series, i, question) -> Draft | None`

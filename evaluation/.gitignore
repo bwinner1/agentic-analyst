@@ -1,0 +1,3 @@
+# downloaded benchmark file (python -m tslm_eval fetch) and exported model inputs
+data/
+inputs/
