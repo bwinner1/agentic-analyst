@@ -1,0 +1,13 @@
+{
+  "system_type": "opentslm",
+  "source": "opentslm-cik/results/untuned",
+  "model": "OpenTSLM/llama-3.2-1b-m4-sp",
+  "checkpoint": "none",
+  "with_context": true,
+  "num_samples": 5,
+  "temperature": 0.7,
+  "parsed_ok_rate": 0.03619047619047619,
+  "instances_with_an_unreadable_sample": 105,
+  "per_sample_validity_saved": true,
+  "forecast_kind": "median"
+}

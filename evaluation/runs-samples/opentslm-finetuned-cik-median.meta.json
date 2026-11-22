@@ -1,0 +1,13 @@
+{
+  "system_type": "opentslm",
+  "source": "opentslm-cik/results/full-samples",
+  "model": "OpenTSLM/llama-3.2-1b-m4-sp",
+  "checkpoint": "/home/analyst/ckpt/best_model_full.pt",
+  "with_context": true,
+  "num_samples": 5,
+  "temperature": 0.7,
+  "parsed_ok_rate": 1.0,
+  "instances_with_an_unreadable_sample": 0,
+  "per_sample_validity_saved": true,
+  "forecast_kind": "median"
+}

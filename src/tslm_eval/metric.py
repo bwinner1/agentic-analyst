@@ -84,6 +84,26 @@ def rcrps(inst, forecast: np.ndarray | None) -> float:
     return float(score)
 
 
+def range_coverage(inst, forecast: np.ndarray | None) -> tuple[float, float]:
+    """How often the truth falls inside the samples' range, and how often it should.
+
+    Returns (share of forecast steps where the true value lies between the lowest and highest
+    sample, the share expected for well-calibrated samples). With n samples drawn from the same
+    distribution as the truth, the truth is the most extreme of the n + 1 values with probability
+    2 / (n + 1), so it lies inside the range with probability (n - 1) / (n + 1): 4 in 6 for five
+    samples. Much lower means the ranges are too narrow (overconfident); much higher, too wide.
+    NaN for a point forecast or a failed one.
+    """
+    if forecast is None:
+        return float("nan"), float("nan")
+    samples = np.asarray(forecast, dtype=float)
+    if samples.ndim == 1 or samples.shape[0] < 2 or samples.shape[1] != inst.horizon:
+        return float("nan"), float("nan")
+    inside = (samples.min(axis=0) <= inst.future) & (inst.future <= samples.max(axis=0))
+    n = samples.shape[0]
+    return float(inside.mean()), (n - 1) / (n + 1)
+
+
 @dataclass(frozen=True)
 class Aggregate:
     mean: float

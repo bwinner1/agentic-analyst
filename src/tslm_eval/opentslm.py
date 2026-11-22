@@ -36,6 +36,20 @@ def _only(column_map: dict, what: str, iid: str) -> list:
     return next(iter(column_map.values()))
 
 
+def _readable_samples(r: dict, iid: str) -> list | None:
+    """The readable sample paths, or None when the run saved no samples or none were readable."""
+    samples, valid = r.get("forecast_samples"), r.get("samples_valid")
+    if samples is None or valid is None:
+        raise ValueError(f"{iid}: this run saved only the median; rerun eval_cik.py with sample saving")
+    s = np.atleast_2d(np.asarray(_only(samples, "forecast", iid), dtype=float))
+    if len(valid) != len(s):
+        raise ValueError(f"{iid}: {len(s)} samples but {len(valid)} validity flags")
+    readable = s[np.asarray(valid, dtype=bool)]
+    if len(readable) == 0 or not np.all(np.isfinite(readable)):
+        return None
+    return readable.tolist()
+
+
 def _forecast(r: dict, iid: str) -> list | None:
     """The model's point forecast for one instance, or None when it gave no readable forecast.
 
@@ -45,17 +59,10 @@ def _forecast(r: dict, iid: str) -> list | None:
     were. Older runs saved only the median; there the median is used as it is (a sample with a gap
     cannot be told apart from the others), and `run_meta` counts how many instances had one.
     """
-    samples, valid = r.get("forecast_samples"), r.get("samples_valid")
-    if samples is not None and valid is not None:
-        s = np.atleast_2d(np.asarray(_only(samples, "forecast", iid), dtype=float))
-        if len(valid) != len(s):
-            raise ValueError(f"{iid}: {len(s)} samples but {len(valid)} validity flags")
-        readable = s[np.asarray(valid, dtype=bool)]
-        if len(readable) == 0:
-            return None
-        forecast = np.median(readable, axis=0)
-    else:
-        forecast = np.asarray(_only(r["forecast_median"], "forecast", iid), dtype=float)
+    if "forecast_samples" in r and "samples_valid" in r:
+        readable = _readable_samples(r, iid)
+        return None if readable is None else np.median(np.asarray(readable), axis=0).tolist()
+    forecast = np.asarray(_only(r["forecast_median"], "forecast", iid), dtype=float)
     return forecast.tolist() if np.all(np.isfinite(forecast)) else None
 
 
@@ -64,8 +71,12 @@ def evaluated_ids(results_dir: Path) -> list[str]:
     return [f"{r['task_name']}/{r['seed']}" for r in _rows(results_dir)]
 
 
-def import_run(results_dir: Path, out_path: Path, instances) -> list[str]:
-    """Write `out_path` (harness prediction format) and `<name>.meta.json` from one eval_cik.py run."""
+def import_run(results_dir: Path, out_path: Path, instances, samples: bool = False) -> list[str]:
+    """Write `out_path` (harness prediction format) and `<name>.meta.json` from one eval_cik.py run.
+
+    By default each instance gets the median as a point forecast. With `samples=True` it gets every
+    readable sample path instead, for comparing forecast ranges; the run must have saved them.
+    """
     results_dir = Path(results_dir)
     by_id = {i.id: i for i in instances}
     records, ids = [], []
@@ -77,12 +88,16 @@ def import_run(results_dir: Path, out_path: Path, instances) -> list[str]:
         truth = np.asarray(_only(r["truth"], "truth", iid), dtype=float)
         if truth.shape != inst.future.shape or not np.allclose(truth, inst.future, rtol=1e-6, atol=1e-6):
             raise ValueError(f"{iid}: the run's true future differs from CiK's; ids or data version do not match")
-        records.append({"id": iid, "forecast": _forecast(r, iid)})  # None is scored as a failed output
+        if samples:
+            paths = _readable_samples(r, iid)
+            records.append({"id": iid, "samples": paths} if paths else {"id": iid, "forecast": None})
+        else:
+            records.append({"id": iid, "forecast": _forecast(r, iid)})  # None is scored as a failed output
         ids.append(iid)
     if len(set(ids)) != len(ids):
         raise ValueError(f"{results_dir}: duplicate instance ids")
     write_predictions(Path(out_path), records)
-    meta = run_meta(results_dir)
+    meta = run_meta(results_dir) | {"forecast_kind": "samples" if samples else "median"}
     Path(out_path).with_suffix(".meta.json").write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
     return ids
 

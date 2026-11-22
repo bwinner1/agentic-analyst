@@ -1,0 +1,36 @@
+{
+  "model": {
+    "mae": 0.2326756927957825,
+    "crps": 0.24088977834050218,
+    "violations": 0.029301075268817218,
+    "n_instances": 105
+  },
+  "seasonal_naive": {
+    "mae": 0.22122624043071312,
+    "crps": 0.25079339985622434,
+    "violations": 0.0,
+    "n_instances": 105
+  },
+  "parsed_ok_rate": 1.0,
+  "all_samples_parsed_rate": 1.0,
+  "settings": {
+    "ckpt": "/home/analyst/ckpt/best_model_full.pt",
+    "base": "OpenTSLM/llama-3.2-1b-m4-sp",
+    "source": "auto",
+    "timenet_ref": "servicenow/context-is-key@1.0.0",
+    "timenet_registry": null,
+    "data": null,
+    "rationales": "/home/analyst/cik_work/OpenTSLM/src/opentslm/time_series_datasets/cik/cik_rationales.jsonl",
+    "no_context": false,
+    "no_baseline": false,
+    "split": "test",
+    "out": "results/full-samples",
+    "num_samples": 5,
+    "temperature": 0.7,
+    "lora_r": 16,
+    "max_history": 512,
+    "max_samples": null,
+    "device": "cuda"
+  },
+  "note": "crps is a sample CRPS weighted like CiK's RCRPS; use CiK's official script for paper-comparable numbers."
+}
