@@ -9,19 +9,24 @@ From the repository root:
 ```
 python -m venv .venv && .venv/Scripts/pip install -e ".[eval,test]"   # macOS/Linux: .venv/bin/pip
 python -m tslm_eval fetch          # pinned CiK parquet -> evaluation/data/ (sha256-checked, git-ignored)
-python -m tslm_eval split          # proposed held-out test set -> evaluation/splits/ (already committed)
+python -m tslm_eval split          # test set = the instances OpenTSLM was held out from -> evaluation/splits/ (committed)
+python -m tslm_eval import-opentslm opentslm-cik/results/full --name opentslm-finetuned-cik   # Jonan's saved outputs
 python -m tslm_eval baselines      # naive + seasonal-naive -> evaluation/runs/
 python -m tslm_eval claude --split test            # prints a cost estimate; add --yes to call the API
 python -m tslm_eval claude --split test --no-context --yes
 python -m tslm_eval report         # scores everything in evaluation/runs/ -> evaluation/results/
-pytest                             # 56 tests, no API key or GPU needed
+pytest                             # 64 tests, no API key or GPU needed
 ```
 
 The Claude run needs `ANTHROPIC_API_KEY` (or an `ant auth login` profile). It writes each answer as it arrives, so rerunning resumes instead of paying twice.
 
 ## Adding a system (OpenTSLM or anything else)
 
-1. `python -m tslm_eval export --split test` writes `evaluation/inputs/cik-test-inputs.jsonl`. Each line has `id`, `context`, `past_times`, `past`, `future_times` and `horizon`, with no answers. `--no-context` blanks the text, and `--split train` writes the other 290 instances *with* their `future` values for training.
+An OpenTSLM run from `opentslm-cik/eval_cik.py` needs one command: `python -m tslm_eval import-opentslm <results folder> --name <system>`. It takes the median of the sampled forecasts, checks every instance's true values against CiK and records the run settings. A run without a checkpoint (`--ckpt none`) is the "before fine-tuning" row; name it `opentslm-pretrained`.
+
+For anything else:
+
+1. `python -m tslm_eval export --split test` writes `evaluation/inputs/cik-test-inputs.jsonl`. Each line has `id`, `context`, `past_times`, `past`, `future_times` and `horizon`, with no answers. `--no-context` blanks the text, and `--split train` writes the other 250 instances *with* their `future` values for training.
 2. Run your model on each line and write `evaluation/runs/<system-name>.jsonl`, one line per instance, in any of these shapes:
 
    ```
@@ -46,10 +51,10 @@ The Claude run needs `ANTHROPIC_API_KEY` (or an `ant auth login` profile). It wr
 
 | Path | Content |
 |---|---|
-| `splits/test-holdout-groups.txt` | The 65 held-out instance ids. Don't train on these. |
+| `splits/test-opentslm-cik.txt` | The 105 test instance ids: 21 task types the fine-tuned model never saw. Don't train on these. |
 | `runs/*.jsonl` | Each system's predictions. Claude runs are paid for, so keep them. |
-| `runs/*.meta.json` | Model, effort, prompt version and cost of each Claude run |
-| `results/` | `results.md`, CSVs and the PNG charts for the posts |
+| `runs/*.meta.json` | Settings of each run: model, checkpoint and sampling for OpenTSLM; effort, prompt version and cost for Claude |
+| `results/` | `results.md`, CSVs (including `paired_test.csv`, our model against each system) and the PNG charts for the posts |
 | `data/`, `inputs/` | Not committed (downloaded or regenerated) |
 
 CiK data: ServiceNow, Apache-2.0, Hugging Face `ServiceNow/context-is-key` at commit `32da467`.
