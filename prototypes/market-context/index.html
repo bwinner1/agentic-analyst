@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Season, market, or us?</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Libre+Caslon+Text:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* VOICE: a central bank bulletin. Calm, exact, every figure traceable.
+   IDEA: the one-page brief a partner reads before a client call.
+   PICTURE: a seasonal chart, this year against ten earlier years, plus a ruled column of the three checks.
+   COLOUR and TYPE: white and ink, deep teal for page accents, validated blue (this business) and orange (the market).
+   LAYOUT: finding as title, controls in one row, two-thirds chart, one-third ruled figures, then the engine's own words. */
+:root{color-scheme:light dark;
+  --bg:light-dark(#ffffff,#0d1416);--ink:light-dark(#14161a,#eef1f1);--muted:light-dark(#5a6068,#a9b2b4);
+  --rule:light-dark(#dfe2e5,#26343a);--accent:light-dark(#0b5d63,#5fc3c9);--soft:light-dark(#eef5f5,#13232a);
+  --us:light-dark(#2a78d6,#3987e5);--mkt:light-dark(#eb6834,#d95926);--ref:light-dark(#c3c8cd,#3d4b51);
+  --good:light-dark(#0b6b2f,#5fd38a);--warn:light-dark(#a1430f,#f0a070)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 Inter,system-ui,sans-serif;overflow-x:clip}
+.band{padding:clamp(24px,4vw,56px) max(5vw,16px);max-width:1240px;margin:0 auto}
+h1{font:400 clamp(28px,4vw,44px)/1.1 "Libre Caslon Text",Georgia,serif;margin:6px 0 10px;text-wrap:balance}
+.kicker{color:var(--muted);font-size:14px;margin:0}
+.lede{color:var(--muted);max-width:68ch;margin:0}
+.controls{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;margin-top:22px}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.seg button,select{font:500 15px Inter,sans-serif;min-height:44px;padding:0 14px;border:1px solid var(--rule);border-radius:8px;background:var(--bg);color:var(--ink);cursor:pointer}
+.seg button[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:var(--bg)}
+select{font-size:16px}
+button:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.grid{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:clamp(20px,3vw,40px);margin-top:26px}
+@media(max-width:820px){.grid{grid-template-columns:minmax(0,1fr)}}
+.fig{position:relative;min-height:360px}.fig>svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.legend{display:flex;gap:18px;flex-wrap:wrap;font-size:14px;color:var(--muted);margin:0 0 8px}
+.legend i{display:inline-block;width:18px;height:3px;border-radius:2px;vertical-align:middle;margin-right:6px}
+.tip{position:absolute;pointer-events:none;background:var(--bg);border:1px solid var(--rule);border-radius:8px;padding:8px 10px;font-size:13px;box-shadow:0 4px 14px rgb(0 0 0/.12);white-space:nowrap;display:none}
+.col{border-top:2px solid var(--ink)}
+.item{border-bottom:1px solid var(--rule);padding:14px 0}
+.item h3{font:500 14px Inter,sans-serif;color:var(--muted);margin:0 0 2px}
+.big{font:400 clamp(30px,4vw,40px)/1.1 "Libre Caslon Text",Georgia,serif;white-space:nowrap}
+.sub{font-size:14px;color:var(--muted)}
+.chip{display:inline-block;margin-top:8px;font:600 13px Inter,sans-serif;padding:4px 10px;border-radius:999px;background:var(--soft);color:var(--accent)}
+.chip.off{color:var(--warn)}
+.strip{position:relative;height:56px;margin-top:6px}.strip svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.bars{display:grid;gap:8px;margin-top:8px}
+.bar{display:grid;grid-template-columns:7.5em minmax(0,1fr) 4.2em;gap:8px;align-items:center;font-size:14px}
+.track{position:relative;height:14px;background:linear-gradient(var(--rule),var(--rule)) center/1px 100% no-repeat}
+.track span{position:absolute;top:0;height:14px;border-radius:4px}
+.bar b{font-weight:600;text-align:right;white-space:nowrap}
+blockquote{margin:28px 0 0;padding:18px 22px;background:var(--soft);border-radius:10px;font:400 18px/1.6 "Libre Caslon Text",Georgia,serif;max-width:80ch}
+.ok{display:block;margin-top:10px;font:600 14px Inter,sans-serif;color:var(--good)}
+details{margin-top:22px;border-top:1px solid var(--rule);padding-top:14px}
+summary{cursor:pointer;font-weight:600;min-height:44px;display:flex;align-items:center}
+ol{padding-left:1.4em;font:14px/1.7 ui-monospace,Menlo,monospace;overflow-wrap:anywhere}
+footer{color:var(--muted);font-size:14px;border-top:1px solid var(--rule);margin-top:30px;padding-top:16px}
+@media(prefers-reduced-motion:no-preference){.track span{transition:left .35s,width .35s}}
+</style>
+</head>
+<body>
+<main class="band">
+  <p class="kicker">Agentic Analyst · market context, on real US Census data</p>
+  <h1 id="title">Loading…</h1>
+  <p class="lede">A partner asks: sales moved this month, is that just the season, the whole market, or something specific to the client? Code answers from the data, and every number is checked before it is shown.</p>
+
+  <div class="controls">
+    <div class="seg" id="cats" role="group" aria-label="Store type"></div>
+    <label>Month <select id="month" aria-label="Month"></select></label>
+  </div>
+
+  <div class="grid">
+    <section>
+      <div class="legend"><span><i style="background:var(--us)"></i><span id="lgYear">This year</span></span><span><i style="background:var(--ref)"></i>Reference years</span></div>
+      <div class="fig" id="fig"><svg id="chart" role="img" aria-label="Monthly sales, this year against the reference years"></svg><div class="tip" id="tip"></div></div>
+    </section>
+    <aside class="col" aria-label="The three checks">
+      <div class="item"><h3 id="h1">Change from last month</h3><div class="big" id="chg"></div><div class="sub" id="lvl"></div></div>
+      <div class="item"><h3 id="h2">Usual for this month</h3><div class="big" id="typ"></div><div class="sub" id="rng"></div>
+        <div class="strip"><svg id="strip" role="img" aria-label="This year's change against each reference year"></svg></div><span class="chip" id="sv"></span></div>
+      <div class="item"><h3 id="h3">Growth on the same month last year</h3><div class="bars" id="bars"></div><span class="chip" id="mv"></span></div>
+    </aside>
+  </div>
+
+  <blockquote><span id="answer"></span><span class="ok" id="ok"></span></blockquote>
+  <details><summary>How each number was calculated</summary><ol id="path"></ol></details>
+  <footer id="foot"></footer>
+</main>
+<script>
+{
+const $ = id => document.getElementById(id);
+const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const SHORT = {"MRTSSM448USN":"Clothing","MRTSSM4482USN":"Shoes","MRTSSM446USN":"Health & personal care","MRTSSM4451USN":"Grocery"};
+const NOUN = {"MRTSSM448USN":"Clothing stores","MRTSSM4482USN":"Shoe stores","MRTSSM446USN":"Health and personal care stores","MRTSSM4451USN":"Grocery stores"};
+let D = null, cat = null, key = null;
+const pct = s => parseFloat(s);  // "+3.9%" -> 3.9, from the engine's own rounded figure
+const label = k => { const [y, m] = k.split("-"); return `${MONTHS[+m - 1]} ${y}`; };
+
+function render() {
+  const c = D.categories.find(x => x.id === cat), a = c.answers[key], s = a.shown;
+  const [y, m] = key.split("-").map(Number), prevM = MONTHS[(m + 10) % 12];
+  const mv = s.market_verdict;
+  $("title").textContent = `${NOUN[cat]} in ${label(key)}: ${s.seasonal_verdict}${mv ? `, and ${mv}` : ""}.`;
+  $("h1").textContent = `Change from ${prevM}`;
+  $("chg").textContent = s.month_change;
+  $("lvl").textContent = `${s.level} ${c.unit} in ${label(key)}`;
+  $("h2").textContent = `Usual for ${MONTHS[m - 1]}, from ${prevM}`;
+  $("typ").textContent = s.seasonal_typical;
+  $("rng").textContent = `median of ${a.reference.length} years; range ${s.seasonal_low} to ${s.seasonal_high}`;
+  $("sv").textContent = s.seasonal_verdict; $("sv").className = "chip" + (s.seasonal_verdict.startsWith("weaker") ? " off" : "");
+  $("h3").textContent = `Growth on ${MONTHS[m - 1]} ${y - 1}`;
+  if (mv) {
+    const rows = [[NOUN[cat], s.year_on_year, "var(--us)"], ["Total retail", s.market_year_on_year, "var(--mkt)"]];
+    const lim = Math.max(5, ...rows.map(r => Math.abs(pct(r[1])))) * 1.1;
+    $("bars").innerHTML = rows.map(([n, v, col]) => { const x = pct(v), w = Math.abs(x) / lim * 50;
+      return `<div class="bar"><span>${n}</span><div class="track"><span style="background:${col};left:${x < 0 ? 50 - w : 50}%;width:${w}%"></span></div><b>${v}</b></div>`; }).join("");
+    $("mv").textContent = mv; $("mv").className = "chip" + (mv === "behind the market" ? " off" : ""); $("mv").hidden = false;
+  } else { $("bars").innerHTML = `<div class="sub">No market comparison for this month.</div>`; $("mv").hidden = true; }
+  $("answer").textContent = a.text;
+  $("ok").textContent = `✓ ${a.checked[0]} of ${a.checked[1]} numbers recomputed from the data by code before display`;
+  $("path").innerHTML = a.path.map(p => `<li>${p.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</li>`).join("");
+  $("lgYear").textContent = String(y);
+  drawChart(); drawStrip();
+}
+
+function drawChart() {
+  const svg = $("chart"), W = svg.clientWidth, H = svg.clientHeight; if (!W) return;
+  const c = D.categories.find(x => x.id === cat), a = c.answers[key], [y, m] = key.split("-").map(Number);
+  const byYear = {}; c.dates.forEach((d, i) => { const [yy, mm] = d.split("-").map(Number); (byYear[yy] ||= [])[mm - 1] = c.values[i]; });
+  const refYears = a.reference.map(r => r[0]);
+  const cur = (byYear[y] || []).slice(0, m);
+  const all = [...refYears.flatMap(r => byYear[r] || []), ...cur].filter(v => v != null);
+  const lo = Math.min(...all) * 0.95, hi = Math.max(...all) * 1.03, narrow = W < 520;
+  const L = narrow ? 44 : 64, R = 12, T = 12, B = 30;
+  const X = i => L + i * (W - L - R) / 11, Yv = v => T + (hi - v) * (H - T - B) / (hi - lo);
+  const line = arr => arr.map((v, i) => v == null ? "" : `${i && arr[i - 1] != null ? "L" : "M"}${X(i).toFixed(1)},${Yv(v).toFixed(1)}`).join("");
+  const raw = (hi - lo) / 4, mag = 10 ** Math.floor(Math.log10(raw)), step = [1, 2, 2.5, 5, 10].map(k => k * mag).find(s => s >= raw);
+  const fmt = v => v >= 1000 ? `${(v / 1000).toLocaleString("en-US", {maximumFractionDigits: step < 1000 ? 1 : 0})}k` : Math.round(v);
+  let g = "";
+  for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) { const yy = Yv(v);
+    g += `<line x1="${L}" x2="${W - R}" y1="${yy}" y2="${yy}" stroke="var(--rule)"/><text x="${L - 8}" y="${yy + 4}" text-anchor="end" font-size="12" fill="var(--muted)">${fmt(v)}</text>`; }
+  MONTHS.forEach((n, i) => { if (!narrow || i % 2 === 0) g += `<text x="${X(i)}" y="${H - 8}" text-anchor="middle" font-size="12" fill="var(--muted)">${n.slice(0, 3)}</text>`; });
+  refYears.forEach(r => g += `<path d="${line(byYear[r] || [])}" fill="none" stroke="var(--ref)" stroke-width="1.5"/>`);
+  g += `<path d="${line(cur)}" fill="none" stroke="var(--us)" stroke-width="2.5" stroke-linejoin="round"/>`;
+  [m - 2, m - 1].filter(i => i >= 0 && cur[i] != null).forEach(i => g += `<circle cx="${X(i)}" cy="${Yv(cur[i])}" r="5" fill="var(--us)" stroke="var(--bg)" stroke-width="2"/>`);
+  g += `<text x="${L}" y="${T - 2}" font-size="12" fill="var(--muted)">${c.unit}</text>`;
+  g += `<line id="xh" y1="${T}" y2="${H - B}" stroke="var(--muted)" stroke-dasharray="3 3" visibility="hidden"/><rect x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}" fill="transparent" id="hit"/>`;
+  svg.innerHTML = g;
+  const tip = $("tip"), xh = svg.querySelector("#xh");
+  svg.querySelector("#hit").onpointermove = e => {
+    const r = svg.getBoundingClientRect(), i = Math.max(0, Math.min(11, Math.round((e.clientX - r.left - L) / ((W - L - R) / 11))));
+    const refs = refYears.map(ry => byYear[ry]?.[i]).filter(v => v != null);
+    xh.setAttribute("x1", X(i)); xh.setAttribute("x2", X(i)); xh.setAttribute("visibility", "visible");
+    tip.innerHTML = `<b>${MONTHS[i]}</b><br>${y}: ${cur[i] != null ? cur[i].toLocaleString("en-US") : "not yet"}<br>Reference years: ${refs.length ? `${Math.min(...refs).toLocaleString("en-US")} to ${Math.max(...refs).toLocaleString("en-US")}` : "none"}`;
+    tip.style.display = "block"; tip.style.left = Math.min(X(i) + 12, W - tip.offsetWidth) + "px"; tip.style.top = T + 8 + "px";
+  };
+  svg.querySelector("#hit").onpointerleave = () => { tip.style.display = "none"; xh.setAttribute("visibility", "hidden"); };
+}
+
+function drawStrip() {
+  const svg = $("strip"), W = svg.clientWidth, H = svg.clientHeight; if (!W) return;
+  const a = D.categories.find(x => x.id === cat).answers[key], now = pct(a.shown.month_change);
+  const vals = [...a.reference.map(r => r[1]), now], lo = Math.min(...vals), hi = Math.max(...vals), pad = (hi - lo) * 0.12 || 1;
+  const X = v => 8 + (v - (lo - pad)) * (W - 16) / (hi - lo + 2 * pad), mid = 22;
+  let g = `<line x1="8" x2="${W - 8}" y1="${mid}" y2="${mid}" stroke="var(--rule)"/>`;
+  g += `<rect x="${X(Math.min(...a.reference.map(r => r[1])))}" y="${mid - 7}" width="${X(Math.max(...a.reference.map(r => r[1]))) - X(Math.min(...a.reference.map(r => r[1])))}" height="14" rx="4" fill="var(--soft)"/>`;
+  a.reference.forEach(([yr, v]) => g += `<circle cx="${X(v)}" cy="${mid}" r="4.5" fill="var(--ref)" stroke="var(--bg)" stroke-width="2"><title>${yr}: ${v > 0 ? "+" : ""}${v.toFixed(1)}%</title></circle>`);
+  g += `<circle cx="${X(now)}" cy="${mid}" r="7" fill="var(--us)" stroke="var(--bg)" stroke-width="2"><title>${key.slice(0, 4)}: ${a.shown.month_change}</title></circle>`;
+  g += `<text x="${Math.max(30, Math.min(W - 30, X(now)))}" y="${mid + 26}" text-anchor="middle" font-size="12" font-weight="600" fill="var(--ink)">${key.slice(0, 4)}</text>`;
+  svg.innerHTML = g;
+}
+
+function setCat(id) {
+  cat = id;
+  document.querySelectorAll("#cats button").forEach(b => b.setAttribute("aria-pressed", b.dataset.id === id));
+  const keys = Object.keys(D.categories.find(x => x.id === id).answers).sort().reverse();
+  if (!keys.includes(key)) key = keys[0];
+  $("month").innerHTML = keys.map(k => `<option value="${k}"${k === key ? " selected" : ""}>${label(k)}</option>`).join("");
+  render();
+}
+
+fetch("answers.json").then(r => r.json()).then(data => {
+  D = data;
+  $("cats").innerHTML = D.categories.map(c => `<button type="button" data-id="${c.id}" aria-pressed="false">${SHORT[c.id]}</button>`).join("");
+  $("cats").onclick = e => { const b = e.target.closest("button"); if (b) setCat(b.dataset.id); };
+  $("month").onchange = e => { key = e.target.value; render(); };
+  $("foot").textContent = `Source: ${D.source} The market is ${D.market}. Reference years are the previous ten, leaving out 2020 and 2021 (pandemic closures). Within the lowest-to-highest range counts as normal for the season; within 1.0 percentage point of the market counts as in line. Answers come from the Agentic Analyst engine (in_context answer type); this page only displays them.`;
+  setCat("MRTSSM4482USN");
+  const ro = new ResizeObserver(() => { drawChart(); drawStrip(); }); ro.observe($("fig"));
+}).catch(() => { $("title").textContent = "Could not load the answers."; });
+}
+</script>
+</body>
+</html>

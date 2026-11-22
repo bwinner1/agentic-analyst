@@ -6,7 +6,7 @@ Strict validation of the data (gaps, duplicates, components that do not add up) 
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 
 MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July",
@@ -19,11 +19,17 @@ class Series:
     unit: str  # a label only, never converted
     dates: tuple[date, ...]  # first day of each month, ascending
     values: tuple[float, ...]
+    # The market this series is compared with (for example total retail for one store type). Optional:
+    # answer types that need it decline when it is missing. Matched to this series by month, not by index.
+    benchmark: "Series | None" = None
 
     @classmethod
     def from_points(cls, name: str, unit: str, points: dict[date, float]) -> "Series":
         ordered = sorted(points)
         return cls(name, unit, tuple(ordered), tuple(points[d] for d in ordered))
+
+    def with_benchmark(self, benchmark: "Series") -> "Series":
+        return replace(self, benchmark=benchmark)
 
     def __len__(self) -> int:
         return len(self.values)
