@@ -88,3 +88,25 @@ Interpretation that needs industry knowledge. Never written by the model; left t
 **Spotting**:
 The model's job: deciding which periods, breaks or components in a series are worth an Answer. The model spots; code computes the figures.
 _Avoid_: detection, analysis, reasoning
+
+## Triage (Round 2 use case)
+
+**Triage**:
+Deciding, before a KPI commentary is written, whether the latest stretch of a series needs attention and what kind. Every Draft starts from it: a data problem must be fixed before anything is said, and an explained event needs a different sentence from a real change.
+_Avoid_: anomaly detection (when meaning the whole task), alerting
+
+**Review window**:
+The latest points of a series that the commentary will talk about (for example the last 20 trading days). Everything before it is the history the window is judged against.
+_Avoid_: test period, horizon
+
+**Analyst note**:
+A short free-text remark that comes with the series, as it would from a client or an analyst: a promotion, an outage, a reload of the data, or nothing relevant. It may or may not explain what the series shows.
+_Avoid_: context, metadata, prompt
+
+**Verdict**:
+The triage outcome for a review window: `normal` (nothing to flag), `business_change` (a real change no note explains), `explained_event` (a change the analyst note accounts for) or `data_issue` (the data is wrong, from the series or the note). Each verdict other than normal comes with a shape and the points it covers.
+_Avoid_: label, class, anomaly type
+
+**Injected event**:
+A change written into a real series on purpose (a spike, a level shift, a duplicated load), so the right verdict, shape and points are known exactly. The series it goes into is a background.
+_Avoid_: synthetic anomaly, fake data

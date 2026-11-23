@@ -1,0 +1,58 @@
+{
+  "args": {
+    "data_dir": "/home/analyst/r2_work/data",
+    "base": "OpenTSLM/llama-3.2-1b-m4-sp",
+    "out": "/home/analyst/r2_work/results/train-values",
+    "epochs": 4,
+    "patience": 2,
+    "batch_size": 1,
+    "lr_encoder": 0.0001,
+    "lr_projector": 5e-05,
+    "lr_lora": 5e-05,
+    "lora_r": 16,
+    "lora_dropout": 0.05,
+    "max_samples": null,
+    "with_values": true,
+    "device": "cuda",
+    "seed": 42
+  },
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 0.1922058670694546,
+      "val_loss": 0.05394961499972851,
+      "train_rows": 4000,
+      "val_rows": 400,
+      "train_skipped": 0,
+      "val_skipped": 0
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.06313730360530553,
+      "val_loss": 0.03467277894333165,
+      "train_rows": 4000,
+      "val_rows": 400,
+      "train_skipped": 0,
+      "val_skipped": 0
+    },
+    {
+      "epoch": 3,
+      "train_loss": 0.04370656296406025,
+      "val_loss": 0.03279887471292795,
+      "train_rows": 4000,
+      "val_rows": 400,
+      "train_skipped": 0,
+      "val_skipped": 0
+    },
+    {
+      "epoch": 4,
+      "train_loss": 0.028161156690813982,
+      "val_loss": 0.03944848712495059,
+      "train_rows": 4000,
+      "val_rows": 400,
+      "train_skipped": 0,
+      "val_skipped": 0
+    }
+  ],
+  "best_val_loss": 0.03279887471292795
+}

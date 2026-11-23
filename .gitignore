@@ -7,3 +7,7 @@ __pycache__/
 .venv/
 .pytest_cache/
 *.egg-info/
+
+# KPI triage: the original downloads and the generated examples are rebuilt by `python -m kpi_triage generate`
+data/kpi_triage/raw/
+data/kpi_triage/generated/
