@@ -298,6 +298,57 @@ def score_line(meta, forecast, baseline, truth) -> str:
             f"The model was {verdict}.")
 
 
+
+# --------------------------------------------------------------------------------------
+# Same-size comparison (saved answers from plain Llama 3.2 1B Instruct and Gemma 3 1B)
+# --------------------------------------------------------------------------------------
+
+COMPARE_DIR = os.path.join(HERE, "compare")
+
+
+def load_compare():
+    """{(task, seed): {"ours": row, "llama": row, "gemma": row}} from the saved test answers."""
+    out = {}
+    files = {"ours": os.path.join(HERE, "replay", "test_predictions_full.jsonl"),
+             "llama": os.path.join(COMPARE_DIR, "llama.jsonl"), "gemma": os.path.join(COMPARE_DIR, "gemma.jsonl")}
+    for key, path in files.items():
+        if not os.path.exists(path):
+            return {}
+        for line in open(path, encoding="utf-8"):
+            d = json.loads(line)
+            out.setdefault((d["task_name"], int(d["seed"])), {})[key] = d
+    return {k: v for k, v in out.items() if len(v) == 3}
+
+
+COMPARE_SUMMARY = """Same 105 test tasks, same prompt, same scoring code. Only our model was fine-tuned.
+
+| | Complete forecasts | Average error (MAE, lower is better) | Explanation matches its own forecast |
+|---|---|---|---|
+| **Agentic Analyst** (fine-tuned OpenTSLM 1B) | **105 / 105** | **0.225** | **13%** |
+| Llama 3.2 1B Instruct, not fine-tuned | 0 / 105 | 0.245 | 7% |
+| Gemma 3 1B, not fine-tuned | 19 / 105 | 1.192 | 2% |
+| Baseline: repeat the last period | n/a | 0.221 | n/a |
+
+Missing steps in the plain models' answers were filled with the baseline before scoring, so Llama's error is mostly the
+baseline's. On the 19 tasks where Gemma wrote a full forecast, its error was 3.51 against our 0.21. Our model ties the
+baseline on error rather than beating it."""
+
+
+def compare_md(entry) -> str:
+    def block(title, d, steps):
+        text = (d.get("raw_output") or "").strip()
+        if len(text) > 1500:
+            text = text[:1500] + "\n…(cut)"
+        return (f"### {title}\n{steps} · error (MAE) {d['scores']['mae']:.3f}\n\n```text\n{text or '(empty answer)'}\n```")
+    o, l, g = entry["ours"], entry["llama"], entry["gemma"]
+    h = l["horizon"]
+    return "\n\n".join([
+        block("Agentic Analyst (fine-tuned)", o, f"{h} of {h} forecast steps"),
+        block("Llama 3.2 1B Instruct (not fine-tuned)", l, f"{l['steps_found']} of {h} forecast steps"),
+        block("Gemma 3 1B (not fine-tuned)", g, f"{g['steps_found']} of {h} forecast steps"),
+    ])
+
+
 # --------------------------------------------------------------------------------------
 # App
 # --------------------------------------------------------------------------------------
@@ -387,6 +438,13 @@ def build_app(args):
             pd.date_range("2024-01-01", periods=84, freq="D"),
             200 + 40 * np.sin(np.arange(84) * 2 * np.pi / 7) + np.arange(84) * 0.8))
 
+    compare = load_compare()
+    ckeys = sorted(compare)
+    clabels = [f"{t} (seed {sd})" for t, sd in ckeys]
+    if ("SensorPeriodicMaintenanceTask", 4) in compare:  # a clear example to open on
+        ckeys.remove(("SensorPeriodicMaintenanceTask", 4))
+        ckeys.insert(0, ("SensorPeriodicMaintenanceTask", 4))
+        clabels = [f"{t} (seed {sd})" for t, sd in ckeys]
     version = open(os.path.join(CODE, "VERSION")).read().strip() if os.path.exists(os.path.join(CODE, "VERSION")) else "?"
     with gr.Blocks(title="Context-aware forecasting demo") as app:
         gr.Markdown(
@@ -422,6 +480,17 @@ def build_app(args):
                 note2 = gr.Textbox("A two-day promotion runs on the 8th and 9th day of the forecast and usually lifts sales "
                                    "by about 30%.", lines=3, label="Business note")
                 go2 = gr.Button("Forecast my series", variant="primary")
+            if compare:
+                with gr.Tab("Same-size comparison"):
+                    gr.Markdown(COMPARE_SUMMARY)
+                    if os.path.exists(os.path.join(COMPARE_DIR, "6_same_size_comparison.png")):
+                        gr.Image(os.path.join(COMPARE_DIR, "6_same_size_comparison.png"), show_label=False,
+                                 interactive=False)
+                    gr.Markdown("Pick a test task to see what each model actually wrote for the same prompt "
+                                "(answers saved from the test runs; nothing runs live here).")
+                    cpick = gr.Dropdown(clabels, value=clabels[0], label="Test task")
+                    cout = gr.Markdown(compare_md(compare[ckeys[0]]))
+                    cpick.change(lambda lb: compare_md(compare[ckeys[clabels.index(lb)]]), cpick, cout)
         plot = gr.Plot(show_label=False)
         status = gr.Markdown()
         expl = gr.Markdown()
