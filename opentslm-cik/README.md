@@ -80,7 +80,7 @@ What this shows:
 | `train_cik.py`, `eval_cik.py` | Train and evaluate. |
 | `run_nuvolos.sh` | One script for any GPU machine: `setup`, `smoke`, `full`, `pack`. |
 | `TRAINING.md`, `NEBIUS.md`, `NUVOLOS.md`, `colab_smoke_test.ipynb` | Step-by-step training guides. |
-| `demo/` | A local web demo (forecast chart plus explanation). See `demo/DEMO.md`. |
+| `demo/` | A local web demo (forecast chart plus explanation, replay mode, and a same-size comparison with plain Llama 3.2 1B and Gemma 3 1B). See `demo/DEMO.md`. |
 | `results/` | Metrics, training logs and all test predictions for the three runs above. |
 | `showcase/` | Charts used in our submission. |
 | `tests/` | Unit tests for `cik_core.py` (`pytest tests`). |
@@ -144,6 +144,10 @@ bash demo/demo.sh replay     # no model needed: replays the saved test answers
 ```
 
 It works on an Apple-silicon Mac (10 to 60 seconds per forecast) or a GPU machine. Details in `demo/DEMO.md`.
+
+The demo also has a **Same-size comparison** tab: on the same 105 test tasks, with the same prompt and scoring,
+plain Llama 3.2 1B Instruct wrote a complete forecast on 0 tasks and Gemma 3 1B on 19, against 105 for our
+fine-tuned model (saved answers in `demo/compare/`, chart in `demo/compare/6_same_size_comparison.png`).
 
 ## License
 

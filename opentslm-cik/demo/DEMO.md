@@ -54,6 +54,9 @@ Everything below is typed in the **Terminal** app.
      Try editing the note and running it again.
    - **Your own series** tab: paste numbers (or `date,value` lines from a spreadsheet), set how many
      steps to forecast, type a note, press **Forecast my series**.
+   - **Same-size comparison** tab: the scores against plain Llama 3.2 1B and Gemma 3 1B (not fine-tuned) on
+     the same 105 tasks, and, for any test task, what each of the three models actually wrote. Good for the
+     showcase video: it shows why fine-tuning matters.
    - Tick **Also forecast without the note** to draw a second line without the note. The gap between
      the blue and orange lines is what the note changed. This takes twice as long.
 
