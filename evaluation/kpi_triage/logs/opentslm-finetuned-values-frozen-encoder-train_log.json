@@ -1,0 +1,59 @@
+{
+  "args": {
+    "data_dir": "/home/analyst/r2_work/data",
+    "base": "OpenTSLM/llama-3.2-1b-m4-sp",
+    "out": "/home/analyst/r2_work/results/frozen-encoder/train-values",
+    "epochs": 4,
+    "patience": 2,
+    "batch_size": 1,
+    "lr_encoder": 0.0,
+    "lr_projector": 5e-05,
+    "lr_lora": 5e-05,
+    "lora_r": 16,
+    "lora_dropout": 0.05,
+    "max_samples": null,
+    "with_values": true,
+    "with_marks": false,
+    "device": "cuda",
+    "seed": 42
+  },
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 0.19364722428430195,
+      "val_loss": 0.056042958591333444,
+      "train_rows": 4000,
+      "val_rows": 400,
+      "train_skipped": 0,
+      "val_skipped": 0
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.06107534908736557,
+      "val_loss": 0.03570192347149373,
+      "train_rows": 4000,
+      "val_rows": 400,
+      "train_skipped": 0,
+      "val_skipped": 0
+    },
+    {
+      "epoch": 3,
+      "train_loss": 0.04343248657597394,
+      "val_loss": 0.03254176161360533,
+      "train_rows": 4000,
+      "val_rows": 400,
+      "train_skipped": 0,
+      "val_skipped": 0
+    },
+    {
+      "epoch": 4,
+      "train_loss": 0.02986703203607806,
+      "val_loss": 0.03200056353120658,
+      "train_rows": 4000,
+      "val_rows": 400,
+      "train_skipped": 0,
+      "val_skipped": 0
+    }
+  ],
+  "best_val_loss": 0.03200056353120658
+}

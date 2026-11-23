@@ -100,7 +100,7 @@ Paired differences, example by example:
 | OpenTSLM minus rules | -0.164 | -0.248 to -0.060 |
 | OpenTSLM minus text-only Llama | -0.260 | -0.336 to -0.172 |
 
-**Against the decision rule fixed in advance, OpenTSLM-SP fails:** it is below both the text-only Llama and the rules. The Round 1 risk named in ADR 0001 came true for this task: a text model given the same numbers spots better.
+**Against the decision rule fixed in advance, OpenTSLM-SP fails:** it is below both the text-only Llama and the rules. The Round 1 risk named in ADR 0001 came true for this task: a text model given the same numbers spots better. Two follow-up fixes (below) bring OpenTSLM level with the text model (0.688 against 0.715, interval of the difference -0.065 to +0.018), but not above it.
 
 **The use case itself works.** A 1B model fine-tuned for about an hour beats a tuned rule system on series and note wordings it never saw, and it gains most exactly where the note has to be read against the series:
 
@@ -117,20 +117,35 @@ Why OpenTSLM loses, from the breakdowns:
 - **The likely cause, not yet tested:** OpenTSLM-SP encodes the series in patches of several points, so exact values and positions blur, while the text model sees every value. Exact zeros, repeated values and a jump by a factor of 1,000 are what triage turns on.
 - **As a note reader the two models are level.** When the rules find the event and a model only gives the verdict, OpenTSLM reaches 0.688 and the text Llama 0.708 (difference -0.020, interval -0.046 to +0.011). This combination was added after seeing the first results, so it is exploratory.
 
-**Is the encoder worth anything on top of text? No.** A further run gave OpenTSLM the same numbers as text *and* its series input (`run.sh trainvalues`; planned after the first OpenTSLM result, before its own). If it beat the text-only Llama, the encoder would add something.
+### Two fixes, after the first OpenTSLM result
 
-| Full match, test | Score | 95% interval | OpenTSLM + values minus it |
+Both were decided after seeing the first OpenTSLM breakdown, so they are follow-ups, not part of the decision rule. Each was run once and scored on test once; all are reported.
+
+1. **Values as text too** (`run.sh trainvalues`): OpenTSLM gets the same numbers as the text-only model, plus its series input. If it beat the text model, the encoder would add something on top of text.
+2. **The same, with the encoder frozen** (`--lr_encoder 0`), because with the values in hand its remaining gap was in reading notes and in false alarms, not in what the series shows.
+
+| Full match, test | Score | 95% interval | Verdict macro-F1 |
 |---|---|---|---|
-| Text-only Llama | 0.715 | 0.580 to 0.825 | -0.124 (-0.172 to -0.077) |
-| Rules | 0.619 | 0.510 to 0.702 | -0.027 (-0.082 to +0.042) |
-| **OpenTSLM + values as text** | **0.591** | 0.479 to 0.693 | |
-| OpenTSLM | 0.455 | 0.394 to 0.544 | +0.136 (+0.059 to +0.200) |
+| Text-only Llama | **0.715** | 0.580 to 0.825 | 0.820 |
+| **OpenTSLM + values as text, encoder frozen** | **0.688** | 0.560 to 0.797 | **0.821** |
+| Rules | 0.619 | 0.510 to 0.702 | 0.708 |
+| OpenTSLM + values as text | 0.591 | 0.479 to 0.693 | 0.786 |
+| OpenTSLM | 0.455 | 0.394 to 0.544 | 0.695 |
 
-- **Lost detail was half the problem.** With the exact values, OpenTSLM gains 0.136: zero outages go from 0.21 to 0.89, frozen values from 0.31 to 0.62, and the median start error halves to 1 point.
-- **With the same information, it is still 0.124 below the text-only model.** The encoder adds nothing on top of text here, and something in OpenTSLM's setup costs accuracy. The gap is now on data problems only the note reveals (duplicated loads 0.28 against 0.97, definition changes 0.13 against 0.67) and on false alarms in normal windows (0.71 against 0.89), not on what the series shows.
-- **Next fix, chosen from this breakdown:** the same run with the encoder frozen, since the remaining gap is not in the series signatures the marker series target (`--with_marks`, built but not run).
+| Paired difference, full match | | 95% interval |
+|---|---|---|
+| Values as text minus plain OpenTSLM | +0.136 | +0.059 to +0.200 |
+| Freezing the encoder (frozen minus trained, both with values) | +0.096 | +0.062 to +0.131 |
+| Frozen-encoder OpenTSLM minus text-only Llama | -0.027 | -0.065 to +0.018 |
+| Frozen-encoder OpenTSLM minus rules | +0.069 | +0.005 to +0.145 |
 
-**How many times the test set was used.** OpenTSLM variants scored on test so far: 3 (plain, values as text, values with the encoder frozen). All are reported here. The validation set could not be used to choose between them: it has no hourly series and only training wordings, while 65% of test is hourly CiK electricity and every test note uses a held-out wording. Fixing that split is a step for the next data version (see Next steps).
+What this shows:
+- **Both fixes were real, and they explain the whole gap.** Lost detail cost about half (zero outages 0.21 to 0.89 once the values are there, median start error 2 points to 1); training the encoder on 4,000 examples cost the rest. With both fixed, OpenTSLM is level with the text-only model and its verdicts are as good (macro-F1 0.821 against 0.820).
+- **The encoder still adds nothing measurable on top of text**, so the decision rule is still not met: OpenTSLM is level with the text model, not above it.
+- **The two models are good at different things.** Frozen-encoder OpenTSLM is ahead where the series shows the event (explained events 0.71 against 0.64, level drops 0.65 against 0.51, frozen values 0.90 against 0.82); the text model is ahead where only the note reveals a data problem (definition changes 0.67 against 0.07, duplicated loads 0.97 against 0.64). That points at training data, not architecture: note-only data problems are 13% of training examples.
+- **Validation loss did not predict any of this.** The trained and frozen encoder runs ended at almost the same validation loss (0.033 and 0.032), but 0.096 apart on test.
+
+**How many times the test set was used.** Three OpenTSLM variants, all reported here. Read the frozen-encoder result with that in mind: its lead over the rules (+0.005 at the lower end) would not survive many more tries. The validation set could not choose between variants: it has no hourly series and only training wordings, while 65% of test is hourly CiK electricity and every test note uses a held-out wording. Fixing that split is the first next step.
 
 ## TimeNet: the Round 2 dataset PR
 
@@ -145,10 +160,10 @@ Each round needs a dataset PR. TimeNet has no business KPI data yet, and Online 
 
 ## Next steps
 
-1. Finish the frozen-encoder run above, and report it whatever it shows.
-2. Unless that run changes the picture: build the Round 2 demo on the fine-tuned text model, which already beats the rules and is the simplest to serve, and report OpenTSLM as a measured negative result with its breakdown.
-3. Rebuild the validation split so it looks like test: hold out some hourly CiK series from training and give validation its own unseen note wordings, so future variants are chosen there and test is used once.
-4. Try the other OpenTSLM variant (Flamingo, cross-attention to the series) and a finer patch size, which are the direct fixes for blurred positions, on this benchmark.
+1. **Rebuild the validation split so it looks like test**: hold out some hourly CiK series from training and give validation its own unseen note wordings. Variants are then chosen there and test is used once. Without this, further tuning on test is not credible.
+2. **Build Round 2 on OpenTSLM-SP with the values as text and the encoder frozen.** It is level with the fine-tuned text model, beats the rules, and is stronger on what the series shows, which is the part that justifies a time-series model (ADR 0001). The fine-tuned text model stays as the comparison that keeps us honest.
+3. **Close its known gap with data**: more training examples of note-only data problems (definition changes, duplicated loads), whose notes OpenTSLM misreads most.
+4. Try the other OpenTSLM variant (Flamingo, cross-attention to the series), on this benchmark, against the same two comparisons.
 5. Hand-write 50 test notes (no templates) and re-score; check real labelled events (NAB, the CiK tasks whose notes describe events).
 6. TimeNet connector for Online Retail II, and the Round 2 dataset PR.
 7. Product side: wire the Verdict into the Draft (a data issue stops the Draft; an explained event is cited; a business change gets measured by code).
