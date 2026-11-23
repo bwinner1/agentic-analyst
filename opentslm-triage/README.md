@@ -45,7 +45,19 @@ bash opentslm-triage/run.sh untuned   # OpenTSLM base, no adapters
 bash opentslm-triage/run.sh train     # fine-tune with validation, then eval
 bash opentslm-triage/run.sh text      # fine-tune text Llama, then eval
 bash opentslm-triage/run.sh text0     # zero-shot text Llama
+bash opentslm-triage/run.sh trainvalues                 # OpenTSLM, values also as text
+OUT=$HOME/r2_work/results/frozen-encoder \
+  bash opentslm-triage/run.sh trainvalues --lr_encoder 0  # the same, encoder frozen (best OpenTSLM so far)
+bash opentslm-triage/val.sh train     # answer the validation split with a trained run
 ```
+
+Results of every run are in `docs/round2/kpi-triage-plan.md`. The best OpenTSLM
+setting so far is values as text with the encoder frozen: level with the text-only
+Llama on test, above the rules. `--with_marks` (two marker series for repeated
+values, zeros and unit changes) is built and tested on CPU but has not been run.
+
+Do not replace `run.sh` on the VM while a run is using it: bash reads the script as it
+goes, so the running job continues from the wrong place in the new file.
 
 Environment defaults: `VENV=$HOME/cik_work/venv`,
 `OPENTSLM_REPO=$HOME/cik_work/OpenTSLM`, `HF_HOME=$HOME/cik_work/hf_cache`,
